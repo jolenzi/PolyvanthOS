@@ -1,0 +1,83 @@
+#!/usr/bin/env php
+<?php
+// SPDX-FileCopyrightText: 2026 PolyvanthOS contributors
+// SPDX-License-Identifier: GPL-2.0-only
+
+declare(strict_types=1);
+
+/*
+ * polyc: compiles a typed subset of PHP to C.
+ *
+ *   polyc --psr4 Polyvanthos=src --out build/gen [--allocator Class::method] src/Kernel.php ...
+ *
+ * Classes that the given files refer to are found through the --psr4 mappings and compiled too.
+ */
+
+spl_autoload_register(static function (string $class): void {
+    $file = __DIR__ . '/src/' . substr($class, strlen('Polyc\\')) . '.php';
+    if (str_starts_with($class, 'Polyc\\') && is_file($file)) {
+        require $file;
+    }
+});
+
+use Polyc\CodeGen;
+use Polyc\CompileError;
+use Polyc\Program;
+
+function usage(): never
+{
+    fwrite(STDERR, "usage: polyc --psr4 Prefix=dir [--allocator Class::method] --out dir file.php...\n");
+    exit(2);
+}
+
+$psr4 = [];
+$allocator = null;
+$out = null;
+$files = [];
+for ($i = 1; $i < $argc; $i++) {
+    switch ($argv[$i]) {
+        case '--psr4':
+            $mapping = explode('=', $argv[++$i] ?? usage(), 2);
+            if (count($mapping) !== 2) {
+                usage();
+            }
+            $psr4[trim($mapping[0], '\\')] = $mapping[1];
+            break;
+        case '--allocator':
+            $allocator = $argv[++$i] ?? usage();
+            break;
+        case '--out':
+            $out = $argv[++$i] ?? usage();
+            break;
+        default:
+            if (str_starts_with($argv[$i], '--')) {
+                usage();
+            }
+            $files[] = $argv[$i];
+    }
+}
+if ($out === null || $files === []) {
+    usage();
+}
+
+try {
+    $program = new Program($psr4, $allocator);
+    foreach ($files as $file) {
+        $program->loadFile($file);
+    }
+    $generated = (new CodeGen($program))->generate();
+} catch (CompileError $e) {
+    fwrite(STDERR, $e->describe() . "\n");
+    exit(1);
+}
+
+// Only rewrite files whose contents changed, so make does not rebuild everything every time.
+foreach ($generated as $path => $text) {
+    $target = rtrim($out, '/') . '/' . $path;
+    if (!is_dir(dirname($target))) {
+        mkdir(dirname($target), 0777, true);
+    }
+    if (!is_file($target) || file_get_contents($target) !== $text) {
+        file_put_contents($target, $text);
+    }
+}
