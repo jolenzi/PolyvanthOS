@@ -2,7 +2,12 @@
 
 A 64-bit multitasking hobby OS with native, MS-DOS, and Linux personalities.
 
-The kernel is written in PHP and compiled to C.
+The kernel is written in PHP. A small compiler, `tools/polyc`, turns it into C, and clang
+builds that for bare metal.
+
+**Fun fact:** the kernel is written in a subset of PHP, just for fun. PHP was never meant for bare
+metal, so `polyc` reads ordinary PHP files, checks the types, and writes C that clang can compile.
+The sources are still real PHP: an editor understands them and `php -l` accepts them.
 
 ## Build
 
