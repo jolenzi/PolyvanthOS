@@ -1,0 +1,11 @@
+# build output
+build/
+*.o
+/kernel
+iso/
+*.iso
+
+# editor and OS junk
+.vscode/
+*.swp
+.DS_Store
