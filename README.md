@@ -23,6 +23,9 @@ Output appears on the serial console. Press Ctrl+A then X to quit QEMU.
 
 GPL-2.0-only. See LICENSE. Limine is BSD-2-Clause and keeps its own license.
 
+MS-DOS is a trademark of Microsoft Corporation. Linux is a registered trademark of Linus
+Torvalds. PolyvanthOS is not affiliated with or endorsed by either.
+
 ## AI assistance
 
 Parts of this project were developed with help from Claude AI.
