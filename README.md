@@ -18,6 +18,11 @@ The sources are still real PHP: an editor understands them and `php -l` accepts 
     make run
 
 Output appears on the serial console. Press Ctrl+A then X to quit QEMU.
+
 ## License
 
 GPL-2.0-only. See LICENSE. Limine is BSD-2-Clause and keeps its own license.
+
+## AI assistance
+
+Parts of this project were developed with help from Claude AI.
