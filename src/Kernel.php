@@ -26,6 +26,7 @@ final class Kernel
     {
         Serial::init(Serial::DEFAULT_BAUD);
         Serial::puts("PolyvanthOS booting...\n");
+        SelfTest::kprintf();
         while (true) {
             CPU::hlt();
         }
