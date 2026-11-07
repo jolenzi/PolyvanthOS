@@ -31,3 +31,35 @@ static inline void Arch_X86_64_CPU_cli(void) {
 static inline void Arch_X86_64_CPU_hlt(void) {
     __asm__ volatile("hlt");
 }
+
+/* lgdt and lidt read a 10-byte structure (2-byte limit, 8-byte base) at the given address. */
+static inline void Arch_X86_64_CPU_lgdt(uint64_t pointer) {
+    __asm__ volatile("lgdt (%0)" : : "r"(pointer) : "memory");
+}
+
+/* lgdt does not touch the segment registers, so reload the data ones from the new table. */
+static inline void Arch_X86_64_CPU_loadDataSegments(uint16_t selector) {
+    __asm__ volatile("mov %w0, %%ds\n"
+                     "mov %w0, %%es\n"
+                     "mov %w0, %%fs\n"
+                     "mov %w0, %%gs\n"
+                     "mov %w0, %%ss\n"
+                     :
+                     : "r"(selector)
+                     : "memory");
+}
+
+/*
+ * cs cannot be set with mov. Push the new cs and the address of label 1, then far return,
+ * which pops both.
+ */
+static inline void Arch_X86_64_CPU_loadCodeSegment(uint16_t selector) {
+    __asm__ volatile("pushq %0\n"
+                     "leaq 1f(%%rip), %%rax\n"
+                     "pushq %%rax\n"
+                     "lretq\n"
+                     "1:\n"
+                     :
+                     : "r"((uint64_t)selector)
+                     : "rax", "memory");
+}

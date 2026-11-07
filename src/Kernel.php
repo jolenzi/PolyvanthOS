@@ -7,6 +7,7 @@ declare(strict_types=1);
 namespace Polyvanthos;
 
 use Polyvanthos\Arch\X86_64\CPU;
+use Polyvanthos\Arch\X86_64\GDT;
 use Polyvanthos\Boot\Limine;
 use Polyvanthos\Drivers\Serial;
 use Polyvanthos\Lib\Panic;
@@ -49,6 +50,7 @@ final class Kernel
             Panic::now('Limine base revision not supported');
         }
 
+        GDT::init();
 
         SelfTest::kprintf();
 
