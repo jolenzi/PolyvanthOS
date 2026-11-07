@@ -3,7 +3,7 @@
 
 /*
  * Exception entry stubs for vectors 0-31.
- * Each stub leaves the stack as: [rsp] = vector, [rsp + 8] = error code.
+ * Each stub pushes the vector number, and a 0 error code if the CPU didn't push one.
  */
 
 .section .text
@@ -56,11 +56,27 @@ ISR_ERR   29
 ISR_ERR   30
 ISR_NOERR 31
 
-/* Shared by every stub: call exception_handler(vector, error_code) in IDT.php */
+/* Shared by every stub: save the registers, then call exception_handler(frame) in IDT.php */
 isr_common:
-    movq 0(%rsp), %rdi  /* 1st argument: vector */
-    movq 8(%rsp), %rsi  /* 2nd argument: error code */
-    subq $8, %rsp       /* 7 values pushed so far, so realign to 16 bytes */
+    /* Save every general register. r15 ends up lowest, matching InterruptFrame */
+    pushq %rax
+    pushq %rbx
+    pushq %rcx
+    pushq %rdx
+    pushq %rsi
+    pushq %rdi
+    pushq %rbp
+    pushq %r8
+    pushq %r9
+    pushq %r10
+    pushq %r11
+    pushq %r12
+    pushq %r13
+    pushq %r14
+    pushq %r15
+
+    movq %rsp, %rdi     /* 1st argument: pointer to the saved registers */
+                        /* 22 values (176 bytes) pushed, so rsp is already 16-byte aligned */
     cld                 /* the calling rules expect the direction flag clear */
     call exception_handler
 1:

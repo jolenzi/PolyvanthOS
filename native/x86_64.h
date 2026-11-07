@@ -71,6 +71,12 @@ static inline void Arch_X86_64_CPU_loadCodeSegment(uint16_t selector) {
                      : "rax", "memory");
 }
 
+static inline uint64_t Arch_X86_64_CPU_readCr2(void) {
+    uint64_t value;
+    __asm__ volatile("mov %%cr2, %0" : "=r"(value));
+    return value;
+}
+
 /* Polyvanthos\Arch\X86_64\ISR */
 
 static inline uint64_t Arch_X86_64_ISR_stub(int64_t vector) {
