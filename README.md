@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/logo.svg" width="128" height="128" alt="PolyvanthOS logo">
+  <img src="docs/images/logo.svg" width="128" height="128" alt="PolyvanthOS logo">
 </p>
 
 # PolyvanthOS
@@ -33,6 +33,11 @@ The logo follows the same idea: six petals around a single core.
     make run
 
 Output appears on the serial console. Press Ctrl+A then X to quit QEMU.
+
+## Documentation
+
+How the code works, and why it was written that way, is in [docs/](docs/README.md). The
+language the kernel is written in is described in [docs/language.md](docs/language.md).
 
 ## Contributing
 
