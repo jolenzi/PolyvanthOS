@@ -81,13 +81,27 @@ final class IDT
 
     /**
      * Called by isr_common in ISR.S. #[Export] gives it the plain C name the assembly looks for.
-     * Exceptions don't return yet, so nothing is saved or restored.
+     * Prints a crash report and stops. Exceptions don't return yet.
      */
     #[Export('exception_handler')]
-    public static function handleException(u64 $vector, u64 $errorCode): never
+    public static function handleException(InterruptFrame $frame): never
     {
+        $vector = $frame->vector;
         $name = $vector < 32 ? self::EXCEPTION_NAMES[$vector] : 'Unknown';
-        Kprintf::printf("CPU exception %lu: %s (error code 0x%lx)\n", $vector, $name, $errorCode);
+
+        Kprintf::printf("CPU exception %lu: %s (error code 0x%lx)\n", $vector, $name, $frame->errorCode);
+        Kprintf::printf("RIP 0x%lx  CS 0x%lx  RFLAGS 0x%lx  RSP 0x%lx  SS 0x%lx\n", $frame->rip, $frame->cs, $frame->rflags, $frame->rsp, $frame->ss);
+        Kprintf::printf("RAX 0x%lx  RBX 0x%lx  RCX 0x%lx\n", $frame->rax, $frame->rbx, $frame->rcx);
+        Kprintf::printf("RDX 0x%lx  RSI 0x%lx  RDI 0x%lx\n", $frame->rdx, $frame->rsi, $frame->rdi);
+        Kprintf::printf("RBP 0x%lx  R8  0x%lx  R9  0x%lx\n", $frame->rbp, $frame->r8, $frame->r9);
+        Kprintf::printf("R10 0x%lx  R11 0x%lx  R12 0x%lx\n", $frame->r10, $frame->r11, $frame->r12);
+        Kprintf::printf("R13 0x%lx  R14 0x%lx  R15 0x%lx\n", $frame->r13, $frame->r14, $frame->r15);
+
+        // Page fault: cr2 holds the address that was accessed
+        if ($vector === 14) {
+            Kprintf::printf("CR2 0x%lx\n", CPU::readCr2());
+        }
+
         Panic::now('CPU exception');
     }
 }

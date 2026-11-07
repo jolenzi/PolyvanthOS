@@ -54,4 +54,11 @@ final class CPU
     public static function loadCodeSegment(u16 $selector): void
     {
     }
+
+    /** The address that caused the last page fault. */
+    #[Native]
+    public static function readCr2(): u64
+    {
+        return 0;
+    }
 }
