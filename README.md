@@ -13,6 +13,17 @@ builds that for bare metal.
 metal, so `polyc` reads ordinary PHP files, checks the types, and writes C that clang can compile.
 The sources are still real PHP: an editor understands them and `php -l` accepts them.
 
+## The name
+
+PolyvanthOS comes from two Greek words: *poly* (πολύς, "many") and *anthos* (ἄνθος, "flower" or
+"blossom"). Together they mean "many-flowered", the same root as the polyanthus flower.
+
+It describes the design: one kernel, many blooms. The native, MS-DOS, and Linux personalities grow
+from the same core, and more can be added. The name also ends in **OS**, so *anthos* doubles as
+"operating system".
+
+The logo follows the same idea: six petals around a single core.
+
 ## Build
 
     sudo apt install clang lld make git php-cli xorriso qemu-system-x86
