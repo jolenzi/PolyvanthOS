@@ -34,10 +34,11 @@ final class SelfTest
         Kprintf::printf("%x\n", 0xDEADBEEF); // deadbeef
         Kprintf::printf("%p\n", 0x1000); // 0x1000
 
-        // TODO: once %lu, %lx and %ld exist, add these:
-        //   the largest u64    18446744073709551615   ->  18446744073709551615
-        //   the largest u64    %lx                    ->  ffffffffffffffff
-        //   the smallest i64   -9223372036854775808   ->  -9223372036854775808
+        Kprintf::printf("%lu\n", 0xFFFFFFFFFFFFFFFF); // 18446744073709551615
+        Kprintf::printf("%lx\n", 0xFFFFFFFFFFFFFFFF); // ffffffffffffffff
+        Kprintf::printf("%ld\n", -9223372036854775807 - 1); // -9223372036854775808
+        Kprintf::printf("%llu\n", 0xFFFFFFFFFFFFFFFF); // 18446744073709551615
+        Kprintf::printf("%d %ld %d\n", 1, 2, 3); // 1 2 3
 
         Kprintf::printf("--- end selftest ---\n");
     }
