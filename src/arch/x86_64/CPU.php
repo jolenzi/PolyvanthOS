@@ -10,6 +10,22 @@ namespace Polyvanthos\Arch\X86_64;
 #[Header('x86_64.h')]
 final class CPU
 {
+    /** Stop this CPU for good. */
+    public static function haltForever(): never
+    {
+        self::cli(); // No interrupts after this
+
+        // An NMI can still wake hlt, so loop back to sleep
+        while (true) {
+            self::hlt();
+        }
+    }
+
+    #[Native]
+    public static function cli(): void
+    {
+    }
+
     #[Native]
     public static function hlt(): void
     {

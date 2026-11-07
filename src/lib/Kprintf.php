@@ -27,7 +27,7 @@ final class Kprintf
     public static function putUint(u64 $value, u32 $base): void
     {
         if ($base < 2 || $base > 16) {
-            $base = 10; // TODO: assert once panic exists
+            Panic::now('Invalid base for put_uint');
         }
 
         $buffer = Mem::stack(64);

@@ -42,7 +42,7 @@ final class Serial
     public static function init(u32 $baudRate): void
     {
         if ($baudRate === 0 || $baudRate > self::UART_BASE_BAUD) {
-            $baudRate = self::DEFAULT_BAUD; // TODO: assert once panic exists
+            $baudRate = self::DEFAULT_BAUD; // Can't panic here: panic prints through this driver
         }
         $divisor = Cast::u16(intdiv(self::UART_BASE_BAUD, $baudRate));
 
