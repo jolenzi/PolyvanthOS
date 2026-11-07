@@ -8,6 +8,7 @@ namespace Polyvanthos;
 
 use Polyvanthos\Arch\X86_64\CPU;
 use Polyvanthos\Arch\X86_64\GDT;
+use Polyvanthos\Arch\X86_64\IDT;
 use Polyvanthos\Boot\Limine;
 use Polyvanthos\Drivers\Serial;
 use Polyvanthos\Lib\Panic;
@@ -51,6 +52,7 @@ final class Kernel
         }
 
         GDT::init();
+        IDT::init();
 
         SelfTest::kprintf();
 
