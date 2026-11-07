@@ -30,4 +30,22 @@ final class CPU
     public static function hlt(): void
     {
     }
+
+    /** Load the GDT. $pointer is the address of a TablePointer. */
+    #[Native]
+    public static function lgdt(u64 $pointer): void
+    {
+    }
+
+    /** Point ds, es, fs, gs and ss at one data segment. */
+    #[Native]
+    public static function loadDataSegments(u16 $selector): void
+    {
+    }
+
+    /** Point cs at a code segment. */
+    #[Native]
+    public static function loadCodeSegment(u16 $selector): void
+    {
+    }
 }
