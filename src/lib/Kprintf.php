@@ -61,6 +61,7 @@ final class Kprintf
 
     /**
      * Supported conversions: %c %s %d %u %x %p %%
+     * %d, %u and %x also accept the l and ll length modifiers, for example %lu or %llx.
      * Every argument is passed as one 64-bit word. A %s argument is the address of the text.
      */
     public static function printf(string $fmt, mixed ...$args): void
@@ -82,6 +83,17 @@ final class Kprintf
                 break; // End of string after '%', stop cleanly
             }
 
+            // Count the 'l' characters
+            $longCount = 0;
+            while ($fmt[$p] === ord('l')) {
+                ++$longCount;
+                ++$p;
+            }
+
+            if ($fmt[$p] === 0) {
+                break; // End of string after "%l", stop cleanly
+            }
+
             $conversion = $fmt[$p];
             switch ($conversion) {
                 case ord('c'):
@@ -91,14 +103,17 @@ final class Kprintf
                     self::putString($args[$next++]);
                     break;
                 case ord('d'):
-                    // The argument is an int (32 bits), so sign-extend it.
-                    self::putInt(Cast::i32($args[$next++]));
+                    // Without an l the argument is an int (32 bits), so sign-extend it.
+                    self::putInt($longCount === 0 ? Cast::i32($args[$next]) : Cast::i64($args[$next]));
+                    $next++;
                     break;
                 case ord('u'):
-                    self::putUint(Cast::u32($args[$next++]), 10);
+                    self::putUint($longCount === 0 ? Cast::u32($args[$next]) : $args[$next], 10);
+                    $next++;
                     break;
                 case ord('x'):
-                    self::putUint(Cast::u32($args[$next++]), 16);
+                    self::putUint($longCount === 0 ? Cast::u32($args[$next]) : $args[$next], 16);
+                    $next++;
                     break;
                 case ord('p'):
                     self::emit(ord('0'));
