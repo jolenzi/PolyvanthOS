@@ -24,6 +24,10 @@ static inline uint8_t Arch_X86_64_Port_inb(uint16_t port) {
 
 /* Polyvanthos\Arch\X86_64\CPU */
 
+static inline void Arch_X86_64_CPU_cli(void) {
+    __asm__ volatile("cli");
+}
+
 static inline void Arch_X86_64_CPU_hlt(void) {
     __asm__ volatile("hlt");
 }
