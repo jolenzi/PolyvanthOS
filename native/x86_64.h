@@ -10,6 +10,9 @@
 
 #include <stdint.h>
 
+/* Table of exception stub addresses, defined in ISR.S. */
+extern const uint64_t isr_stub_table[32];
+
 /* Polyvanthos\Arch\X86_64\Port */
 
 static inline void Arch_X86_64_Port_outb(uint16_t port, uint8_t value) {
@@ -37,6 +40,10 @@ static inline void Arch_X86_64_CPU_lgdt(uint64_t pointer) {
     __asm__ volatile("lgdt (%0)" : : "r"(pointer) : "memory");
 }
 
+static inline void Arch_X86_64_CPU_lidt(uint64_t pointer) {
+    __asm__ volatile("lidt (%0)" : : "r"(pointer) : "memory");
+}
+
 /* lgdt does not touch the segment registers, so reload the data ones from the new table. */
 static inline void Arch_X86_64_CPU_loadDataSegments(uint16_t selector) {
     __asm__ volatile("mov %w0, %%ds\n"
@@ -62,4 +69,10 @@ static inline void Arch_X86_64_CPU_loadCodeSegment(uint16_t selector) {
                      :
                      : "r"((uint64_t)selector)
                      : "rax", "memory");
+}
+
+/* Polyvanthos\Arch\X86_64\ISR */
+
+static inline uint64_t Arch_X86_64_ISR_stub(int64_t vector) {
+    return isr_stub_table[vector];
 }

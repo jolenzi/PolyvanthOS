@@ -37,6 +37,12 @@ final class CPU
     {
     }
 
+    /** Load the IDT. $pointer is the address of a TablePointer. */
+    #[Native]
+    public static function lidt(u64 $pointer): void
+    {
+    }
+
     /** Point ds, es, fs, gs and ss at one data segment. */
     #[Native]
     public static function loadDataSegments(u16 $selector): void
