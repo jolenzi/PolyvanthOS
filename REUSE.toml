@@ -1,7 +1,14 @@
 version = 1
 
 [[annotations]]
-path = [".gitignore", ".gitmodules", "README.md", "NOTICE", "LICENSE"]
+path = [".gitignore", ".gitmodules", "README.md", "NOTICE", "LICENSE", "SECURITY.md", "AUTHORS",
+        "CONTRIBUTING.md", "CHANGELOG.md", ".gitattributes", ".github/**"]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 PolyvanthOS contributors"
 SPDX-License-Identifier = "GPL-2.0-only"
+
+[[annotations]]
+path = "CODE_OF_CONDUCT.md"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "Contributor Covenant contributors <https://www.contributor-covenant.org>"
+SPDX-License-Identifier = "CC-BY-4.0"
