@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang lld make php-cli xorriso qemu-system-x86 pipx
+          pipx install reuse
+          pipx install clang-format==23.1.5
+
+      - name: Build Limine
+        run: make -C limine
+
+      - name: Check formatting and licensing
+        run: make check
+
+      - name: Test the compiler
+        run: make test-compiler
+
+      - name: Build
+        run: make
+
+      - name: Boot and run selftest
+        run: make test

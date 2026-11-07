@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-FileCopyrightText: 2026 PolyvanthOS contributors -->
+<!-- SPDX-License-Identifier: GPL-2.0-only -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="PolyvanthOS logo">
+  <title>PolyvanthOS</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1e2140"/>
+      <stop offset="1" stop-color="#11132a"/>
+    </linearGradient>
+    <linearGradient id="petal-a" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#ff7a59"/>
+      <stop offset="1" stop-color="#ffb347"/>
+    </linearGradient>
+    <linearGradient id="petal-b" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#c2417a"/>
+      <stop offset="1" stop-color="#f06292"/>
+    </linearGradient>
+    <!-- One angular petal pointing up from the centre -->
+    <polygon id="petal" points="64,62 48,38 64,12 80,38"/>
+  </defs>
+
+  <rect x="4" y="4" width="120" height="120" rx="26" fill="url(#bg)"/>
+
+  <!-- Six petals, alternating colours -->
+  <g stroke="#11132a" stroke-width="1.5" stroke-linejoin="round">
+    <use href="#petal" fill="url(#petal-a)"/>
+    <use href="#petal" fill="url(#petal-b)" transform="rotate(60 64 64)"/>
+    <use href="#petal" fill="url(#petal-a)" transform="rotate(120 64 64)"/>
+    <use href="#petal" fill="url(#petal-b)" transform="rotate(180 64 64)"/>
+    <use href="#petal" fill="url(#petal-a)" transform="rotate(240 64 64)"/>
+    <use href="#petal" fill="url(#petal-b)" transform="rotate(300 64 64)"/>
+  </g>
+
+  <!-- Hexagon core with a terminal prompt -->
+  <polygon points="64,50 76.1,57 76.1,71 64,78 51.9,71 51.9,57" fill="#11132a" stroke="#ffd166" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M57.5,59.5 L62.5,64 L57.5,68.5" fill="none" stroke="#ffd166" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="64.5" y1="68.5" x2="70.5" y2="68.5" stroke="#ffd166" stroke-width="2.5" stroke-linecap="round"/>
+</svg>
