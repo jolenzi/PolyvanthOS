@@ -31,7 +31,7 @@ src/
   arch/x86_64/
     Port.php                in/out instructions (outb, inb)
     CPU.php                 haltForever() and the other CPU instructions
-    GDT.php                 segment table
+    GDT.php, TSS.php        segment table and the task state segment
     TablePointer.php        what lgdt and lidt read
     IDT.php                 interrupt table and the exception handler
     IDTEntry.php            one slot of the interrupt table
@@ -86,8 +86,8 @@ mean that, so it calls `Panic::now()` instead of guessing.
   fault.
 - Only CPU exceptions (vectors 0 to 31) are set up. There are no hardware interrupts, so no timer
   and no keyboard.
-- There is one CPU, one stack, and no TSS. A stack overflow ends in a triple fault, which resets
-  the machine without a message.
+- There is one CPU and one stack. A stack overflow is reported as a double fault, because that
+  exception has its own emergency stack, but nothing prevents it yet: there is no guard page.
 - Serial output is polled, and a character can be dropped if the port never becomes ready.
 - `kprintf` has no field widths or zero padding.
 - The only automated test is the boot selftest.

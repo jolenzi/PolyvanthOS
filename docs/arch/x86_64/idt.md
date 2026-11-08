@@ -47,8 +47,8 @@ loaded first.
 is a 64-bit interrupt gate. An interrupt gate also clears the interrupt flag on entry, so the
 handler can't be interrupted in the middle of its work.
 
-`ist` is 0, meaning the CPU keeps using the current stack. That has a downside, covered at the
-end.
+`ist` is 0 for most vectors, meaning the CPU keeps using the current stack. The double fault
+(vector 8) uses 1, which is its own stack from the TSS. More on that below.
 
 Unused slots stay all zeros. The "present" bit is 0, so the CPU treats them as not there. If one
 of them fires anyway, the CPU escalates to a double fault, then a triple fault.
@@ -179,13 +179,33 @@ kernel is ready to fix the problem and continue.
 the bottom of `ISR.S`, and then runs `lidt` with a `TablePointer`, the same shape as the one
 used for the GDT. `ISR::stub($i)` is a native function that reads the table.
 
+Vector 8 is then set again with `ist = 1`. `setGate` takes the IST slot as an optional third
+argument that defaults to 0, so the loop doesn't need to change.
+
+### The double fault stack
+
+A double fault is raised when the CPU fails to deliver an exception. The most common cause is a
+bad stack: the CPU tries to push the exception frame, the push faults, and that counts as a
+second fault. If the double fault handler also ran on the bad stack it would fail the same way,
+and the CPU would triple fault and reset with no message.
+
+With `ist = 1` the CPU switches to the emergency stack from the TSS before pushing anything, so
+the handler can print the register dump. `GDT::init` must run before `IDT::init` for this to work,
+because the TSS has to be loaded before any exception can use it.
+
+How we tested it: set `rsp` to 0 and run `ud2`. The CPU tries to push the frame at the top of
+the address space, which isn't mapped, so delivery fails and a double fault follows. Without the
+IST the log shows a triple fault. With it, we get `CPU exception 8: Double fault` and a full
+register dump with `RSP 0x0`.
+
 The IDT array is `#[Align(16)]`. The CPU doesn't require it, but Intel recommends it for speed.
 
 ## Known weaknesses
 
-- **No separate stack for faults.** With `ist` at 0, the CPU pushes the frame on the current
-  stack. If the exception was caused by running out of stack, there's no room to push, the
-  attempt fails, and the machine triple faults without a message. The usual fix is a TSS with an
-  IST entry, giving the double fault handler its own stack.
+- **Only the double fault has its own stack.** Every other exception still runs on whatever
+  stack was current. NMI (2) and machine check (18) can arrive at any moment, even in the middle
+  of another handler, so they are the next candidates for an IST slot.
+- **No guard page.** Overflowing the kernel stack doesn't fault by itself, because nothing marks
+  the memory below it as unmapped. It just corrupts whatever is there. That needs paging control.
 - **Exceptions are fatal.** See above.
 - **Nothing for hardware interrupts.** Slots 32 to 255 are empty.

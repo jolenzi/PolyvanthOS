@@ -1,6 +1,6 @@
 # GDT
 
-Files: `src/arch/x86_64/GDT.php`, `src/arch/x86_64/TablePointer.php`.
+Files: `src/arch/x86_64/GDT.php`, `src/arch/x86_64/TablePointer.php`, `src/arch/x86_64/TSS.php`.
 
 The GDT (Global Descriptor Table) is a table in memory that describes segments. The CPU reads it
 whenever a segment register is loaded.
@@ -23,19 +23,21 @@ Limine already set up a GDT, and the kernel is running on it right now. We repla
   memory Limine was using.
 - The IDT we load next needs a code segment selector. It's better that this points into a table
   we own and know the layout of.
-- Later we'll need entries Limine doesn't give us, like user mode segments and a TSS.
+- We need a TSS, which Limine's table doesn't give us, so double faults can use their own stack.
 
 Limine's selectors were 0x28 for code and 0x30 for data. Ours are 0x08 and 0x10.
 
 ## The table
 
-We have three entries, 8 bytes each:
+We have five slots, 8 bytes each. The first three are normal entries. The last two together are
+one 16-byte TSS descriptor:
 
 | Index | Offset | Selector | What it is |
 |---|---|---|---|
 | 0 | 0x00 | 0x00 | Null. The CPU requires it to be all zeros. Loading it means "no segment". |
 | 1 | 0x08 | 0x08 | Kernel code |
 | 2 | 0x10 | 0x10 | Kernel data |
+| 3 and 4 | 0x18 | 0x18 | TSS (takes two slots) |
 
 A selector is just the byte offset of the entry in the table, with the lowest 3 bits reserved for
 the table type and the privilege level. Both are 0 for us, so selector = index * 8.
@@ -99,11 +101,74 @@ final class TablePointer
 `#[Packed]` stops the compiler from putting padding between the two fields, and `#[Size(10)]`
 makes it check the total. The CPU expects the
 address right after the 2-byte limit, with nothing in between. The limit is "size minus 1" because
-that is how the instruction defines it, so a 24-byte table has a limit of 23.
+that is how the instruction defines it, so a 40-byte table has a limit of 39.
 
 `TablePointer` is shared with the IDT, because `lidt` reads the same shape. `GDT::init` fills in
 a static instance when it runs. It can't be done in the declaration, because polyc only accepts
 plain constants as the starting value of a static property, and the table's address is not one.
+
+## The TSS
+
+The TSS (Task State Segment) was how 32-bit x86 switched between tasks in hardware. Nobody does
+that anymore, and 64-bit mode removed it. What is left is a small structure the CPU still reads,
+and we use it for one thing: the **IST** (Interrupt Stack Table).
+
+The IST is a list of 7 stack addresses. An IDT gate can say "use IST slot N". When that gate
+fires, the CPU loads `rsp` from that slot before it pushes anything, so it doesn't matter how
+broken the old stack was. We use slot 1 for the double fault (see [idt.md](idt.md)).
+
+The layout is fixed by the CPU, which reads it by byte offset:
+
+```
+offset   0   4 bytes   reserved
+offset   4   rsp0-2    stacks for ring 0, 1, 2 (unused for now)
+offset  28   8 bytes   reserved
+offset  36   ist1-7    the emergency stacks
+offset  92   8 bytes   reserved
+offset 100   2 bytes   reserved
+offset 102   2 bytes   I/O permission bitmap offset
+```
+
+That is 104 bytes. The `TSS` class is `#[Packed]`, because `rsp0` sits at byte 4 and the
+compiler would otherwise move it to byte 8. `#[Size(104)]` makes the compiler check the size, so
+a layout mistake fails the build instead of giving the CPU garbage.
+
+**Slot 1 is `ist[0]`.** The IDT counts IST slots from 1, but the PHP array counts from 0.
+
+**The emergency stack** is a 16 KiB static array (`#[FixedArray('u8', 16384)]`) in `.bss`. Stacks grow down, so the first push lands
+just below the starting address. That means `ist[0]` is set to the address one past the end of
+the array, not the start.
+
+**The I/O bitmap offset** is set to the size of the TSS. An offset past the end means "no bitmap",
+so user mode (later) can't touch I/O ports.
+
+### The descriptor
+
+A TSS descriptor is 16 bytes, two 64-bit halves. Unlike code and data, base and limit matter
+here. They tell the CPU where the TSS is and how big it is.
+
+```
+low half:
+bits  0-15   limit bits 0-15       (TSS::SIZE - 1 = 103)
+bits 16-39   base bits 0-23
+bits 40-47   access byte 0x89      present, ring 0, type "64-bit TSS (available)"
+bits 48-51   limit bits 16-19      0
+bits 52-55   flags                 0
+bits 56-63   base bits 24-31
+high half:
+bits  0-31   base bits 32-63
+bits 32-63   zero
+```
+
+The address of the TSS is split across the two halves with shifts and masks, the same way the
+IDT splits a handler address.
+
+### Loading it
+
+`lgdt` loads the table but doesn't say which entry is the TSS. The `ltr` instruction ("load task
+register") does, using the selector 0x18. It has to run after `lgdt`, because it looks the
+selector up in the new table. It also marks the descriptor as "busy" by writing to it, so the
+table must stay writable: it is a static array, not a constant.
 
 ## Reloading the segment registers
 
@@ -135,8 +200,8 @@ next label called 1, looking forward".
 
 ## Not in the table yet
 
-- A TSS (task state segment). It's needed for switching stacks on an interrupt, and it's how a
-  safe double fault handler works.
+- The `rsp0` stack in the TSS. Switching from user mode to the kernel will need it.
+- IST stacks for other vectors (NMI and machine check are the usual next ones).
 - User mode code and data segments (ring 3).
 - `fs` and `gs` bases. Those are set through model-specific registers, not the GDT, and kernels
   use them later for per-CPU data.
