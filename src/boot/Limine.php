@@ -13,6 +13,10 @@ namespace Polyvanthos\Boot;
  */
 final class Limine
 {
+    // The first two words of every request ID
+    public const COMMON_MAGIC_0 = 0xc7b1dd30df4c8b88;
+    public const COMMON_MAGIC_1 = 0x0a82e883a194f07b;
+
     // Limine scans for these in order: start marker, requests, end marker
     public const REQUESTS_START_0 = 0xf6b8f4b39de7d1ae;
     public const REQUESTS_START_1 = 0xfab91a6940fcb9cf;
@@ -26,4 +30,24 @@ final class Limine
     public const BASE_REVISION_0 = 0xf9562b2d5c95a6c8;
     public const BASE_REVISION_1 = 0x6a7b384944536bdc;
     public const BASE_REVISION = 3;
+
+    // The last two words of the memory map and HHDM request IDs
+    public const MEMMAP_REQUEST_2 = 0x67cf3d9d378a806f;
+    public const MEMMAP_REQUEST_3 = 0xe304acdfc50c3c62;
+    public const HHDM_REQUEST_2 = 0x48dcf1cb8ad2b852;
+    public const HHDM_REQUEST_3 = 0x63984e959a98244b;
+
+    // Which word of a request holds the address of the answer (id[4], revision, response)
+    public const RESPONSE_WORD = 5;
+
+    // Memory map region types
+    public const MEMMAP_USABLE = 0;
+    public const MEMMAP_RESERVED = 1;
+    public const MEMMAP_ACPI_RECLAIMABLE = 2;
+    public const MEMMAP_ACPI_NVS = 3;
+    public const MEMMAP_BAD_MEMORY = 4;
+    public const MEMMAP_BOOTLOADER_RECLAIMABLE = 5;
+    public const MEMMAP_EXECUTABLE_AND_MODULES = 6;
+    public const MEMMAP_FRAMEBUFFER = 7;
+    public const MEMMAP_RESERVED_MAPPED = 8;
 }

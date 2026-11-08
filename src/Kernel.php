@@ -9,9 +9,13 @@ namespace Polyvanthos;
 use Polyvanthos\Arch\X86_64\CPU;
 use Polyvanthos\Arch\X86_64\GDT;
 use Polyvanthos\Arch\X86_64\IDT;
+use Polyvanthos\Boot\HHDMResponse;
 use Polyvanthos\Boot\Limine;
+use Polyvanthos\Boot\MemMapResponse;
 use Polyvanthos\Drivers\Serial;
+use Polyvanthos\Lib\Kprintf;
 use Polyvanthos\Lib\Panic;
+use Polyvanthos\Mm\MemMap;
 
 final class Kernel
 {
@@ -31,6 +35,28 @@ final class Kernel
         Limine::BASE_REVISION_0,
         Limine::BASE_REVISION_1,
         Limine::BASE_REVISION,
+    ];
+
+    // Ask Limine for the memory map and the HHDM offset. A request is the ID (4 words), the
+    // revision, then the answer's address. Limine fills in the answer before kmain runs.
+    #[FixedArray('u64', 6), Section('.limine_requests'), Used, Volatile]
+    private static array $memmapRequest = [
+        Limine::COMMON_MAGIC_0,
+        Limine::COMMON_MAGIC_1,
+        Limine::MEMMAP_REQUEST_2,
+        Limine::MEMMAP_REQUEST_3,
+        0,
+        0,
+    ];
+
+    #[FixedArray('u64', 6), Section('.limine_requests'), Used, Volatile]
+    private static array $hhdmRequest = [
+        Limine::COMMON_MAGIC_0,
+        Limine::COMMON_MAGIC_1,
+        Limine::HHDM_REQUEST_2,
+        Limine::HHDM_REQUEST_3,
+        0,
+        0,
     ];
 
     #[FixedArray('u64', 2), Section('.limine_requests_end'), Used, Volatile]
@@ -53,6 +79,18 @@ final class Kernel
 
         GDT::init();
         IDT::init();
+
+        // If Limine didn't answer, the answer's address is still 0, so check before using it.
+        // The HHDM offset is where Limine maps all physical RAM, so physical address P is
+        // reachable at P + offset.
+        $memmap = self::$memmapRequest[Limine::RESPONSE_WORD];
+        $hhdm = self::$hhdmRequest[Limine::RESPONSE_WORD];
+        if ($memmap === 0 || $hhdm === 0) {
+            Panic::now('Limine did not provide a memory map');
+        }
+        MemMap::setHhdmOffset(HHDMResponse::at($hhdm)->offset);
+        Kprintf::printf("HHDM offset: 0x%lx\n", MemMap::hhdmOffset());
+        MemMap::printMemoryMap(MemMapResponse::at($memmap));
 
         SelfTest::kprintf();
 
