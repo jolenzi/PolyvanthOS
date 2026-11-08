@@ -8,6 +8,7 @@ The folders match the source tree, so the page for `src/lib/Kprintf.php` is
 
 - [Overview](overview.md): what the kernel does today, how a boot goes, the source layout, and
   the rules the code follows.
+- [Roadmap](roadmap.md): what is done and what comes next, as a checklist.
 - [The language](language.md): the subset of PHP the kernel is written in, and what each part of it
   turns into in C.
 - [The compiler](tools/polyc.md): how polyc turns PHP into C, how to use it, and how it is tested.
