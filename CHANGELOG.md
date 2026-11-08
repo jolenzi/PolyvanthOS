@@ -18,3 +18,4 @@ All notable changes to this project are documented here. The format is based on
 - IDT with entry stubs for CPU exceptions 0-31, which report the exception and panic.
 - Double faults run on their own stack (IST), so a broken stack no longer causes a silent triple
   fault.
+- Request the memory map and HHDM offset from Limine and print them at boot.

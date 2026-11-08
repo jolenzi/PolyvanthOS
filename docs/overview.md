@@ -15,7 +15,8 @@ This page shows how the pieces fit together. The other pages go through each pie
 4. `Kernel::main` sets up the serial port, so from here on we can print.
 5. It checks that Limine accepted the protocol revision we asked for.
 6. It loads our own GDT, then our own IDT.
-7. It runs the `kprintf` selftest, then stops the CPU.
+7. It reads the HHDM offset and prints Limine's memory map.
+8. It runs the `kprintf` selftest, then stops the CPU.
 
 All output goes to the serial port (COM1), not to the screen. In QEMU that shows up in your
 terminal.
@@ -41,11 +42,15 @@ src/
     linker.ld               memory layout of the kernel
   boot/
     Limine.php              the numbers of the Limine boot protocol
+    MemMapResponse.php, MemMapEntry.php, HHDMResponse.php
+                            what Limine answers
   drivers/
     Serial.php              COM1 serial port
   lib/
     Kprintf.php             formatted printing
     Panic.php               stop the kernel with a message
+  mm/
+    MemMap.php              print Limine's memory map, remember the HHDM offset
 native/                     the few lines of C that PHP can't express (asm, memory access)
 tools/polyc/                the PHP-to-C compiler, with its tests
 limine.conf                 bootloader config

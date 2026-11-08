@@ -58,6 +58,19 @@ sections next to each other at the start of `.data`, in that order. Limine looks
 job for the linker. The compiler turns these attributes into the matching C ones. See
 [the language reference](../language.md).
 
+### Asking for more than the revision
+
+Besides the base revision, `Kernel.php` has two real requests: one for the memory map and one
+for the HHDM offset. Each is an array of six 64-bit words: an `id` of four words (Limine's magic
+numbers for that request), a `revision` (0), and a `response` word that starts as 0. Before
+`Kernel::main` runs, Limine finds the array and puts the address of its answer in the last word.
+`Kernel::main` reads it with `Limine::RESPONSE_WORD` (word 5) and checks it isn't 0 before using
+it. They sit in `.limine_requests` between the markers like the others. See
+[../mm/memmap.md](../mm/memmap.md) for what we do with the answers.
+
+The arrays are `#[Volatile]` for the same reason as before: our code never writes the response
+word, so without `volatile` the compiler could decide it is always 0 and delete the check.
+
 ### The base revision check
 
 Limine marks the revision as supported by changing the third value in the array from our revision
