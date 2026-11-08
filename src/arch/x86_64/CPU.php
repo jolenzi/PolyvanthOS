@@ -43,6 +43,12 @@ final class CPU
     {
     }
 
+    /** Tell the CPU which GDT entry holds the TSS. */
+    #[Native]
+    public static function ltr(u16 $selector): void
+    {
+    }
+
     /** Point ds, es, fs, gs and ss at one data segment. */
     #[Native]
     public static function loadDataSegments(u16 $selector): void

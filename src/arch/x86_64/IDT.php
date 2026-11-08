@@ -62,17 +62,22 @@ final class IDT
             self::setGate($i, ISR::stub($i));
         }
 
+        // A double fault happens when delivering an exception fails, often because the stack
+        // is bad. It gets its own stack so it can still run.
+        self::setGate(8, ISR::stub(8), GDT::DOUBLE_FAULT_IST);
+
         self::$pointer->limit = count(self::$idt) * IDTEntry::SIZE - 1;
         self::$pointer->base = Mem::addr(self::$idt);
         CPU::lidt(Mem::addr(self::$pointer));
     }
 
-    private static function setGate(int $vector, u64 $handler): void
+    // $ist is the emergency stack slot (1-7) to switch to, or 0 to keep the current stack.
+    private static function setGate(int $vector, u64 $handler, int $ist = 0): void
     {
         $gate = self::$idt[$vector];
         $gate->offsetLow = $handler & 0xFFFF;
         $gate->selector = GDT::KERNEL_CODE_SELECTOR;
-        $gate->ist = 0;
+        $gate->ist = $ist;
         $gate->typeAttr = 0x8E; // present, ring 0, 64-bit interrupt gate
         $gate->offsetMid = ($handler >> 16) & 0xFFFF;
         $gate->offsetHigh = $handler >> 32;

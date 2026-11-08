@@ -44,6 +44,10 @@ static inline void Arch_X86_64_CPU_lidt(uint64_t pointer) {
     __asm__ volatile("lidt (%0)" : : "r"(pointer) : "memory");
 }
 
+static inline void Arch_X86_64_CPU_ltr(uint16_t selector) {
+    __asm__ volatile("ltr %w0" : : "r"(selector) : "memory");
+}
+
 /* lgdt does not touch the segment registers, so reload the data ones from the new table. */
 static inline void Arch_X86_64_CPU_loadDataSegments(uint16_t selector) {
     __asm__ volatile("mov %w0, %%ds\n"
