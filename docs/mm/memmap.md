@@ -108,6 +108,6 @@ before anything else needs it.
 
 ## Not done yet
 
-- Nothing allocates yet. The map is only printed.
+- The map is only used to set up the [page allocator](pmm.md). Nothing else reads it.
 - The kernel image's own page tables are still Limine's.
 - Limine's memory and the ACPI tables are never reused.

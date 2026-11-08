@@ -7,6 +7,9 @@ declare(strict_types=1);
 namespace Polyvanthos;
 
 use Polyvanthos\Lib\Kprintf;
+use Polyvanthos\Lib\Panic;
+use Polyvanthos\Mm\MemMap;
+use Polyvanthos\Mm\PMM;
 
 /** Checks that run at boot. The output goes to the serial console. */
 final class SelfTest
@@ -41,5 +44,51 @@ final class SelfTest
         Kprintf::printf("%d %ld %d\n", 1, 2, 3); // 1 2 3
 
         Kprintf::printf("--- end selftest ---\n");
+    }
+
+    /** Allocates and frees pages and panics if anything is wrong. Run after PMM::init. */
+    public static function pmm(): void
+    {
+        Kprintf::printf("--- pmm selftest ---\n");
+
+        // Allocate, check and free pages. Any failure panics with a reason.
+        $before = PMM::freePageCount();
+        $a = PMM::allocPage();
+        $b = PMM::allocPage();
+        $c = PMM::allocPage();
+        if ($a === 0 || $b === 0 || $c === 0) {
+            Panic::now('pmm selftest failed: alloc_page returned 0');
+        }
+        if ($a % PMM::PAGE_SIZE !== 0 || $b % PMM::PAGE_SIZE !== 0 || $c % PMM::PAGE_SIZE !== 0) {
+            Panic::now('pmm selftest failed: alloc_page returned unaligned page');
+        }
+        if ($a === $b || $a === $c || $b === $c) {
+            Panic::now('pmm selftest failed: alloc_page returned duplicate pages');
+        }
+        if (PMM::freePageCount() !== $before - 3) {
+            Panic::now('pmm selftest failed: free_page_count incorrect after allocation');
+        }
+        $p = $a + MemMap::hhdmOffset();
+        Mem::write64($p, 0x1122334455667788);
+        if (Mem::read64($p) !== 0x1122334455667788) {
+            Panic::now('pmm selftest failed: memory write/read failed');
+        }
+        PMM::freePage($b);
+        $d = PMM::allocPage();
+        if ($d !== $b) {
+            Panic::now('pmm selftest failed: did not get expected page from search hint');
+        }
+        PMM::freePage($a);
+        PMM::freePage($b);
+        PMM::freePage($c);
+        if (PMM::freePageCount() !== $before) {
+            Panic::now('pmm selftest failed: free_page_count incorrect after freeing');
+        }
+        Kprintf::printf("  page 0x%lx\n", $a);
+        Kprintf::printf("  page 0x%lx\n", $b);
+        Kprintf::printf("  page 0x%lx\n", $c);
+        Kprintf::printf("  page 0x%lx\n", $d);
+
+        Kprintf::printf("--- end pmm selftest ---\n");
     }
 }
