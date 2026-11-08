@@ -15,6 +15,7 @@ use Polyvanthos\Boot\MemMapResponse;
 use Polyvanthos\Drivers\Serial;
 use Polyvanthos\Lib\Kprintf;
 use Polyvanthos\Lib\Panic;
+use Polyvanthos\Mm\Heap;
 use Polyvanthos\Mm\MemMap;
 use Polyvanthos\Mm\PMM;
 
@@ -96,6 +97,10 @@ final class Kernel
         // Start the page allocator (it needs the HHDM offset set above) and test it.
         PMM::init(MemMapResponse::at($memmap));
         SelfTest::pmm();
+
+        // The heap takes its memory from the page allocator, so it starts after it.
+        Heap::init();
+        SelfTest::heap();
 
         SelfTest::kprintf();
 

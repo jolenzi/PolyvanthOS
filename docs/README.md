@@ -28,6 +28,8 @@ The folders match the source tree, so the page for `src/lib/Kprintf.php` is
 | `src/lib/Kprintf.php` | [lib/kprintf.md](lib/kprintf.md) | Number printing, format strings, and variable arguments |
 | `src/lib/Panic.php` | [lib/panic.md](lib/panic.md) | What happens when the kernel gives up |
 | `src/mm/MemMap.php` | [mm/memmap.md](mm/memmap.md) | Asking Limine for the memory map and the HHDM offset, and what the map tells us |
+| `src/mm/PMM.php` | [mm/pmm.md](mm/pmm.md) | The page allocator: the bitmap, how it starts up, and why it is built this way |
+| `src/mm/Heap.php` | [mm/heap.md](mm/heap.md) | `kmalloc` and `kfree`: boxes with labels, splitting, and merging |
 
 ## Images
 
