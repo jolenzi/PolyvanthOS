@@ -8,6 +8,7 @@ namespace Polyvanthos;
 
 use Polyvanthos\Lib\Kprintf;
 use Polyvanthos\Lib\Panic;
+use Polyvanthos\Mm\Heap;
 use Polyvanthos\Mm\MemMap;
 use Polyvanthos\Mm\PMM;
 
@@ -90,5 +91,78 @@ final class SelfTest
         Kprintf::printf("  page 0x%lx\n", $d);
 
         Kprintf::printf("--- end pmm selftest ---\n");
+    }
+
+    /** Allocates, writes to and frees heap memory and panics if anything is wrong. Run after Heap::init. */
+    public static function heap(): void
+    {
+        Kprintf::printf("--- heap selftest ---\n");
+
+        $before = Heap::freeBytes();
+
+        if (Heap::kmalloc(0) !== 0) {
+            Panic::now('heap selftest failed: kmalloc(0) returned memory');
+        }
+
+        $a = Heap::kmalloc(1);
+        $b = Heap::kmalloc(100);
+        $c = Heap::kmalloc(5000);
+        if ($a === 0 || $b === 0 || $c === 0) {
+            Panic::now('heap selftest failed: kmalloc returned 0');
+        }
+        if ((($a | $b | $c) & 15) !== 0) {
+            Panic::now('heap selftest failed: address not 16-byte aligned');
+        }
+        if (Heap::freeBytes() >= $before) {
+            Panic::now('heap selftest failed: free bytes did not go down');
+        }
+
+        // If two blocks overlapped, one fill would overwrite the other.
+        self::fill($a, 1, 0xAA);
+        self::fill($b, 100, 0xBB);
+        self::fill($c, 5000, 0xCC);
+        if (!self::holds($a, 1, 0xAA) || !self::holds($b, 100, 0xBB) || !self::holds($c, 5000, 0xCC)) {
+            Panic::now('heap selftest failed: blocks overlap');
+        }
+
+        // The hole left by b is the first free box that fits, so it must be reused.
+        Heap::kfree($b);
+        $d = Heap::kmalloc(50);
+        if ($d !== $b) {
+            Panic::now('heap selftest failed: freed hole was not reused');
+        }
+        Heap::kfree($d);
+
+        // Everything is free again, so the boxes must have merged back into one.
+        Heap::kfree($a);
+        Heap::kfree($c);
+        if (Heap::freeBytes() !== $before) {
+            Panic::now('heap selftest failed: free bytes not restored after merging');
+        }
+
+        if (Heap::kmalloc(64 * 1024 * 1024) !== 0) {
+            Panic::now('heap selftest failed: oversize request succeeded');
+        }
+
+        Kprintf::printf("  a=%p b=%p c=%p\n", $a, $b, $c);
+        Kprintf::printf("--- end heap selftest ---\n");
+    }
+
+    // Write $value into $count bytes, and check later that they all still hold it.
+    private static function fill(u64 $address, u64 $count, u8 $value): void
+    {
+        for ($i = 0; $i < $count; $i++) {
+            Mem::write8($address + $i, $value);
+        }
+    }
+
+    private static function holds(u64 $address, u64 $count, u8 $value): bool
+    {
+        for ($i = 0; $i < $count; $i++) {
+            if (Mem::read8($address + $i) !== $value) {
+                return false;
+            }
+        }
+        return true;
     }
 }

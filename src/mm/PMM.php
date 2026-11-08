@@ -157,6 +157,49 @@ final class PMM
         }
     }
 
+    /**
+     * Hand out $count free pages that are next to each other. Returns the PHYSICAL address of
+     * the first one, or 0 if there is no run that long (or $count is 0).
+     */
+    public static function allocContiguous(u64 $count): u64
+    {
+        // Look for $count free pages in a row. A taken page resets the count.
+        if ($count === 0) {
+            return 0;
+        }
+
+        $runStart = Cast::u64(0);
+        $runLength = Cast::u64(0);
+        for ($page = Cast::u64(0); $page < self::$totalPages; $page++) {
+            if (self::isUsed($page)) {
+                $runLength = 0;
+                continue;
+            }
+            if ($runLength === 0) {
+                $runStart = $page;
+            }
+            $runLength++;
+            if ($runLength === $count) {
+                for ($i = 0; $i < $count; $i++) {
+                    self::markUsed($runStart + $i);
+                }
+                self::$freePages -= $count;
+                return $runStart << self::PAGE_SHIFT;
+            }
+        }
+
+        return 0;
+    }
+
+    /** Give back a run from allocContiguous, with the same $count. */
+    public static function freeContiguous(u64 $phys, u64 $count): void
+    {
+        // freePage already checks alignment, range and double frees.
+        for ($i = 0; $i < $count; $i++) {
+            self::freePage($phys + $i * self::PAGE_SIZE);
+        }
+    }
+
     /** How many pages are free right now. */
     public static function freePageCount(): u64
     {

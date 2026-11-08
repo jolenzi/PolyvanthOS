@@ -16,7 +16,9 @@ This page shows how the pieces fit together. The other pages go through each pie
 5. It checks that Limine accepted the protocol revision we asked for.
 6. It loads our own GDT, then our own IDT.
 7. It reads the HHDM offset and prints Limine's memory map.
-8. It runs the `kprintf` selftest, then stops the CPU.
+8. It starts the page allocator and runs its selftest.
+9. It starts the heap and runs its selftest.
+10. It runs the `kprintf` selftest, then stops the CPU.
 
 All output goes to the serial port (COM1), not to the screen. In QEMU that shows up in your
 terminal.
@@ -51,6 +53,8 @@ src/
     Panic.php               stop the kernel with a message
   mm/
     MemMap.php              print Limine's memory map, remember the HHDM offset
+    PMM.php                 physical page allocator (bitmap)
+    Heap.php, Block.php     kmalloc and kfree
 native/                     the few lines of C that PHP can't express (asm, memory access)
 tools/polyc/                the PHP-to-C compiler, with its tests
 limine.conf                 bootloader config
@@ -61,8 +65,9 @@ docs/                       these pages, laid out like src/
 
 ## Rules the code follows
 
-**No heap.** There is no memory allocator yet. Everything is either a global variable or lives on
-the stack. That is why buffers like the one in `putUint` have a fixed size.
+**A small fixed heap.** `kmalloc` and `kfree` exist, but the heap is one 1 MiB strip and can't grow
+yet. Early code and anything that has to work before the heap starts still uses global variables
+and the stack. That is why buffers like the one in `putUint` have a fixed size.
 
 **No startup code.** Nothing runs before `kmain`, and the linker script does not run the
 `.init_array` section. So a static property can only start out as a plain constant, which the
@@ -99,5 +104,4 @@ mean that, so it calls `Panic::now()` instead of guessing.
 
 ## What comes next
 
-Read the memory map from Limine, build a physical page allocator, set up paging, add a heap, then
-a timer interrupt and a scheduler. Multitasking sits on top of all of that.
+Take over paging from Limine, then a timer interrupt and a scheduler. Multitasking sits on top of all of that.
