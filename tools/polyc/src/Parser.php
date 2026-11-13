@@ -22,9 +22,10 @@ final class Parser
         '||' => 1, '&&' => 2, '|' => 3, '^' => 4, '&' => 5,
         '==' => 6, '!=' => 6, '===' => 6, '!==' => 6,
         '<' => 7, '<=' => 7, '>' => 7, '>=' => 7,
-        '<<' => 8, '>>' => 8,
-        '+' => 9, '-' => 9,
-        '*' => 10, '/' => 10, '%' => 10,
+        '.' => 8,
+        '<<' => 9, '>>' => 9,
+        '+' => 10, '-' => 10,
+        '*' => 11, '/' => 11, '%' => 11,
     ];
 
     private const ASSIGN_OPS = ['=', '+=', '-=', '*=', '/=', '%=', '&=', '|=', '^=', '<<=', '>>='];
@@ -590,6 +591,9 @@ final class Parser
     {
         $left = $this->parseTernary();
         $token = $this->peek();
+        if ($token !== null && $token->text === '.=') {
+            $this->fail("'.=' is not supported: strings are joined with '.' at build time, so a string never grows");
+        }
         if ($token !== null && in_array($token->text, self::ASSIGN_OPS, true) && !$token->is(T_VARIABLE)) {
             if (!in_array($left['k'], ['var', 'prop', 'sprop', 'idx'], true)) {
                 $this->fail('cannot assign to this expression');

@@ -262,6 +262,36 @@ final class Program
     }
 
     /** Evaluate a whole-number constant expression, or return null if it is not one. */
+    /**
+     * The text of a constant string expression, or null if it is not one. That is a string literal, a
+     * whole-number constant (written in decimal), a class constant holding either, or any of those
+     * joined with '.'. Everything is known at build time, so the result is one string in the C code.
+     *
+     * @param array<string,mixed> $node
+     */
+    public function foldString(array $node, ClassInfo $ctx): ?string
+    {
+        switch ($node['k']) {
+            case 'str':
+                return $node['v'];
+            case 'int':
+                return $node['big'] ? sprintf('%u', $node['v']) : (string) $node['v'];
+            case 'bin':
+                if ($node['op'] === '.') {
+                    $left = $this->foldString($node['l'], $ctx);
+                    $right = $left === null ? null : $this->foldString($node['r'], $ctx);
+                    return $right === null ? null : $left . $right;
+                }
+                break;
+            case 'cconst':
+                $class = $node['cls'] === 'self' ? $ctx : $this->find($node['cls'], $ctx->file, $node['line']);
+                $const = $class->consts[$node['name']] ?? null;
+                return $const === null ? null : $this->foldString($const->expr, $class);
+        }
+        $value = $this->foldInt($node, $ctx);
+        return $value === null ? null : (string) $value;
+    }
+
     public function foldInt(array $node, ClassInfo $ctx): ?int
     {
         switch ($node['k']) {

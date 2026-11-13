@@ -33,3 +33,5 @@ All notable changes to this project are documented here. The format is based on
   instead of `Cast::u8($x)`. The `Cast` class is gone.
 - `foreach` works over arrays (`foreach ($a as $x)` and `foreach ($a as $i => $x)`), over the bytes
   of a string, and over `range($first, $last)`. It compiles to a plain C `for` loop.
+- Strings can be joined with `.` when everything is known at build time: literals, whole-number
+  constants and class constants. `'size ' . self::SIZE` is one constant string.
