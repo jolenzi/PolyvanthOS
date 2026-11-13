@@ -579,6 +579,8 @@ final class FunctionGen
             'prop' => $this->property($n),
             'idx' => $this->index($n),
             'new' => $this->newObject($n),
+            'ex' => $n['ex'],
+            'interp' => $this->err('a string with variables in it can only be the first argument of a function marked #[Format], such as Kprintf::printf', $n),
             'arr' => $this->err('an array literal can only initialise a static property or a constant', $n),
             default => $this->err("unsupported expression '{$n['k']}'", $n),
         };
@@ -862,6 +864,59 @@ final class FunctionGen
     }
 
     /**
+     * "free: $n pages" given to a #[Format] function such as Kprintf::printf becomes the format
+     * "free: %lu pages" followed by the value of $n, so no string is built at run time. A % in the
+     * text is doubled so it stays a plain %.
+     *
+     * @param list<array<string,mixed>> $nodes
+     * @param array<string,mixed> $at
+     * @return list<array<string,mixed>> the arguments again: the format, then one value for each variable
+     */
+    private function formatArguments(ClassInfo $cls, MethodInfo $m, array $nodes, array $at): array
+    {
+        $first = $m->params[0] ?? null;
+        $last = $m->params[count($m->params) - 1] ?? null;
+        if ($first === null || $first->type->kind !== 'string' || $first->variadic || !$last->variadic) {
+            $this->err("{$cls->short}::{$m->name}() is marked #[Format], so it must take a string followed by variadic arguments", $at);
+        }
+        if (count($nodes) > 1) {
+            $this->err('a string with variables in it cannot be followed by more arguments: put every value inside the string', $nodes[1]);
+        }
+        $format = '';
+        $values = [];
+        foreach ($nodes[0]['parts'] as $part) {
+            if (is_string($part)) {
+                $format .= str_replace('%', '%%', $part);
+                continue;
+            }
+            [$spec, $value] = $this->formatValue($this->expr($part), $part);
+            $format .= $spec;
+            $values[] = ['k' => 'ex', 'ex' => $value, 'line' => $part['line']];
+        }
+        return [['k' => 'str', 'v' => $format, 'line' => $nodes[0]['line']], ...$values];
+    }
+
+    /**
+     * The printf conversion for a value that is put in a string, and the value to pass with it.
+     * Numbers are printed in decimal. A bool becomes the text true or false, and an object its address.
+     * A number is never printed as a character: use %c in a printf format for that.
+     *
+     * @param array<string,mixed> $node
+     * @return array{string, Ex}
+     */
+    private function formatValue(Ex $e, array $node): array
+    {
+        $t = $e->t;
+        return match ($t->kind) {
+            'int' => [$t->bits === 64 ? ($t->signed ? '%ld' : '%lu') : ($t->signed ? '%d' : '%u'), $e],
+            'bool' => ['%s', new Ex("({$e->c} ? \"true\" : \"false\")", Type::simple('string'))],
+            'string' => ['%s', new Ex($e->c, $t)],
+            'class' => ['%p', $e],
+            default => $this->err('cannot put ' . $t->name() . ' in a string', $node),
+        };
+    }
+
+    /**
      * The C argument list for a call. Variadic arguments become a count and an array of 64-bit
      * words: f("x", 1, 2) calls f("x", 2, (const uint64_t[]){1, 2}).
      *
@@ -870,6 +925,9 @@ final class FunctionGen
      */
     private function callArgs(ClassInfo $cls, MethodInfo $m, array $nodes, ?string $self, array $at): string
     {
+        if (isset($m->attrs['Format']) && ($nodes[0]['k'] ?? '') === 'interp') {
+            $nodes = $this->formatArguments($cls, $m, $nodes, $at);
+        }
         $out = $self === null ? [] : [$self];
         $fixed = array_values(array_filter($m->params, fn (ParamInfo $p): bool => !$p->variadic));
         $variadic = count($m->params) > count($fixed);

@@ -35,3 +35,5 @@ All notable changes to this project are documented here. The format is based on
   of a string, and over `range($first, $last)`. It compiles to a plain C `for` loop.
 - Strings can be joined with `.` when everything is known at build time: literals, whole-number
   constants and class constants. `'size ' . self::SIZE` is one constant string.
+- A string with variables in it (`"free: $n pages"`) can be given to a function marked `#[Format]`,
+  such as `Kprintf::printf`. The compiler turns it into a printf format and its arguments.

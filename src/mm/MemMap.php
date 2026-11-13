@@ -60,7 +60,9 @@ final class MemMap
             }
         }
         // Only usable regions can be handed out later. A page is 4096 bytes (2^12).
-        Kprintf::printf("Usable memory: %lu MiB (%lu pages)\n", $usableBytes >> 20, $usableBytes >> 12);
+        $mebibytes = $usableBytes >> 20;
+        $pages = $usableBytes >> 12;
+        Kprintf::printf("Usable memory: $mebibytes MiB ($pages pages)\n");
     }
 
     private static function typeName(u64 $type): string
