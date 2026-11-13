@@ -217,7 +217,7 @@ Scratch space in a function, such as the digits buffer in `Kprintf::putUint`, co
 ## Statements
 
 `if`, `elseif`, `else`, `while`, `do ... while`, `for` (with commas in the first and last part),
-`switch`, `break`, `continue`, `return`, blocks, and expressions.
+`foreach`, `switch`, `break`, `continue`, `return`, blocks, and expressions.
 
 - `switch` is on whole numbers, and each `case` is a constant (a number, a character such as
   `'x'`, or a class constant). It falls through like C and PHP.
@@ -225,13 +225,42 @@ Scratch space in a function, such as the digits buffer in `Kprintf::putUint`, co
   like `break`, so polyc doesn't allow it and nobody is surprised.
 - `break` and `continue` take no level.
 
-Not available: `foreach`, `try`/`catch`/`throw`, `goto`, `echo`, `unset`, `global`, closures,
+### `foreach`
+
+`foreach` goes through the elements of an array, the bytes of a string, or a `range`:
+
+```php
+foreach (self::$numbers as $n) { $total += $n; }          // each element
+foreach (self::NAMES as $i => $name) { /* ... */ }         // with the index as the key
+foreach ($text as $c) { Serial::putc($c); }                // each byte of a string, as a u8
+foreach (range(0, 31) as $vector) { /* 0, 1, ... 31 */ }   // both ends are included
+```
+
+- It is a `for` loop over a hidden counter, so `break`, `continue` and the number rules work as in
+  any other loop. The loop variable lasts after the loop, as in PHP, and takes the type of the
+  first value stored in it. The key is the position (an `int`), starting at 0.
+- **The list has to be a variable, a property, a constant or a string literal.** It is read again
+  on every round, so something like `foreach (self::make() as $x)` is an error. Arrays are the
+  fixed-size arrays described above, and a variadic parameter such as `$args` counts as one.
+- **A string is walked up to its zero byte.** Real PHP can't loop over a string, so this is an
+  addition. It replaces `for ($i = 0; $s[$i] !== 0; $i++)`.
+- **An array of structs gives you a pointer to each element**, so `$counter->step = 5` changes the
+  element itself. For an array of numbers you get a copy of the number, as in PHP.
+- **By reference (`as &$x`) is not supported.**
+- **`range($first, $last)` works as in PHP:** both ends are included, and it counts down when
+  `$first` is larger than `$last`. That makes `range(0, $n - 1)` a trap when `$n` is 0, because it
+  then runs for 0 and -1 (and with a `u64` `$n` the `- 1` wraps around to a huge number). Use it
+  with constants, or use `for` when counting up to a variable. Unsigned numbers count down safely
+  and stop at 0. `range()` is only allowed as the list of a `foreach`, and takes no step.
+
+Not available: `try`/`catch`/`throw`, `goto`, `echo`, `unset`, `global`, closures,
 `static` variables, `list`, `match`, `??`, `<=>`, `**`, references and the `.` operator.
 
 ## Calling functions
 
-Only methods can be called, as `Class::method()` or `$object->method()`, plus two built-in
-functions: `intdiv` and `count`.
+Only methods can be called, as `Class::method()` or `$object->method()`, plus a few built-in
+functions: `intdiv`, `count`, the conversions `u8()` to `i64()` and `bool()`, and `range()`
+(which only works inside `foreach`).
 
 - Arguments are stored into the parameter types, so a number is cut down to fit.
 - Parameters can have default values that are constants. Only `int`, `bool` and `string` parameters
@@ -279,7 +308,7 @@ Every message has the file and line, like `src/drivers/Serial.php:58: error: ...
 
 - using a variable before it has a value;
 - passing a string where a number is expected, or a number where an object is expected;
-- `/`, a float, a PHP cast, `foreach`, string interpolation and the other unsupported things above;
+- a float, a PHP cast, string interpolation and the other unsupported things above;
 - using a private member from another class, calling a method that doesn't exist, passing too many
   arguments;
 - a `switch` case that isn't constant, `continue` inside a `switch`;

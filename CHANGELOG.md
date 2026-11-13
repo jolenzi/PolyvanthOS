@@ -31,3 +31,5 @@ All notable changes to this project are documented here. The format is based on
   wanted, so `ord()` is gone: write `$c === '%'` and `case 'x':`.
 - Number conversions are written `u8($x)`, `i32($x)`, `u64(0)` and so on, built into the compiler,
   instead of `Cast::u8($x)`. The `Cast` class is gone.
+- `foreach` works over arrays (`foreach ($a as $x)` and `foreach ($a as $i => $x)`), over the bytes
+  of a string, and over `range($first, $last)`. It compiles to a plain C `for` loop.

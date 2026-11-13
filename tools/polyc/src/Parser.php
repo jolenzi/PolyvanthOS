@@ -431,6 +431,8 @@ final class Parser
                 return ['k' => 'do', 'cond' => $cond, 'body' => $body, 'line' => $line];
             case 'for':
                 return $this->parseFor();
+            case 'foreach':
+                return $this->parseForeach();
             case 'switch':
                 return $this->parseSwitch();
             case 'break':
@@ -446,7 +448,6 @@ final class Parser
                 $e = $this->isOp(';') ? null : $this->parseExpr();
                 $this->expect(';');
                 return ['k' => 'return', 'e' => $e, 'line' => $line];
-            case 'foreach':
             case 'try':
             case 'throw':
             case 'echo':
@@ -505,6 +506,41 @@ final class Parser
             $parts[] = $list;
         }
         return ['k' => 'for', 'init' => $parts[0], 'cond' => $parts[1], 'step' => $parts[2], 'body' => $this->parseBody(), 'line' => $line];
+    }
+
+    /** foreach (SUBJECT as $value) and foreach (SUBJECT as $key => $value). */
+    private function parseForeach(): array
+    {
+        $line = $this->line();
+        $this->next();
+        $this->expect('(');
+        $subject = $this->parseExpr();
+        $this->expectWord('as');
+        $value = $this->parseForeachVariable();
+        $key = null;
+        if ($this->accept('=>')) {
+            $key = $value;
+            $value = $this->parseForeachVariable();
+        }
+        if ($key === $value) {
+            $this->fail("foreach cannot use \${$value} for both the key and the value");
+        }
+        $this->expect(')');
+        return ['k' => 'foreach', 'subject' => $subject, 'key' => $key, 'value' => $value, 'body' => $this->parseBody(), 'line' => $line];
+    }
+
+    /** The name (without the $) of a foreach variable. */
+    private function parseForeachVariable(): string
+    {
+        if ($this->isOp('&')) {
+            $this->fail('foreach cannot take its values by reference: references are not supported');
+        }
+        $token = $this->peek();
+        if ($token === null || !$token->is(T_VARIABLE) || $token->text === '$this') {
+            $this->fail('foreach needs a plain variable to put each value in');
+        }
+        $this->next();
+        return substr($token->text, 1);
     }
 
     /** @return array<string,mixed> */
@@ -762,7 +798,7 @@ final class Parser
         }
         if ($this->isOp('(')) {
             if ($token->is([T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED])) {
-                $this->fail('only the built-in functions u8() to i64(), bool(), intdiv() and count() can be called');
+                $this->fail('only the built-in functions u8() to i64(), bool(), intdiv(), count() and range() can be called');
             }
             return ['k' => 'call', 'name' => $lower, 'args' => $this->parseArgs(), 'line' => $line];
         }
