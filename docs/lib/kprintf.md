@@ -64,7 +64,7 @@ numbers is undefined behaviour in C, so the compiler is allowed to do anything.
 The fix is to do the negation as unsigned numbers, where wrapping around is defined:
 
 ```php
-$magnitude = Cast::u64($value);
+$magnitude = u64($value);
 if ($value < 0) {
     $magnitude = 0 - $magnitude;
 }
@@ -122,13 +122,27 @@ matters:
 %lld -> the same as %ld                        %llu      -> the same as %lu
 ```
 
-In the code, `%d` without an `l` is `Cast::i32($args[$next])`, which cuts the word to 32 bits and
-reads it as signed. With an `l` it is `Cast::i64`. Going through a word like this means a number
+In the code, `%d` without an `l` is `i32($args[$next])`, which cuts the word to 32 bits and
+reads it as signed. With an `l` it is `i64`. Going through a word like this means a number
 and its size can never get out of step the way they can with C's `va_arg`.
 
 A `%s` argument is the address of the text, so `printf` reads it a byte at a time with
 `Mem::read8` until it finds a zero. An address of 0 prints `(null)`. The `%c` argument is the
-character code, for example `ord('a')`.
+character code, for example `u8('a')`.
+
+### Variables in the format
+
+`printf` is marked `#[Format]`, so it also accepts a string with variables in it:
+
+```php
+$mebibytes = $usableBytes >> 20;
+Kprintf::printf("Usable memory: $mebibytes MiB\n");
+```
+
+The compiler turns this into `printf("Usable memory: %lu MiB\n", $mebibytes)`, so it is the same
+call and the same output, and nothing is built at run time. The conversion is chosen from the type
+of the variable (see [the language](../language.md#strings)). It prints in decimal, so for hex
+addresses or `%c` you still write the format yourself, as in `printf("RIP 0x%lx\n", $rip)`.
 
 ### What is checked
 

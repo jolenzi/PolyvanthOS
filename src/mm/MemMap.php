@@ -8,7 +8,6 @@ namespace Polyvanthos\Mm;
 
 use Polyvanthos\Boot\Limine;
 use Polyvanthos\Boot\MemMapResponse;
-use Polyvanthos\Cast;
 use Polyvanthos\Lib\Kprintf;
 
 final class MemMap
@@ -46,7 +45,7 @@ final class MemMap
     /** Print every region in Limine's memory map, then the total usable memory. */
     public static function printMemoryMap(MemMapResponse $memmap): void
     {
-        $usableBytes = Cast::u64(0);
+        $usableBytes = u64(0);
         for ($i = 0; $i < $memmap->entryCount; $i++) {
             $entry = $memmap->entry($i);
             Kprintf::printf(
@@ -61,7 +60,9 @@ final class MemMap
             }
         }
         // Only usable regions can be handed out later. A page is 4096 bytes (2^12).
-        Kprintf::printf("Usable memory: %lu MiB (%lu pages)\n", $usableBytes >> 20, $usableBytes >> 12);
+        $mebibytes = $usableBytes >> 20;
+        $pages = $usableBytes >> 12;
+        Kprintf::printf("Usable memory: $mebibytes MiB ($pages pages)\n");
     }
 
     private static function typeName(u64 $type): string

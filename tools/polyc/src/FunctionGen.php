@@ -15,7 +15,7 @@ namespace Polyc;
  *    same way a C cast would. The generated code always writes that cast out.
  *  - Whole-number constants are written out again for each type they are used as.
  *  - Variables are not declared in PHP, so a variable gets the type of the first value stored in
- *    it. Use Cast::u64(0) and friends to pick another type. All variables are declared at the
+ *    it. Use u64(0) and friends to pick another type. All variables are declared at the
  *    top of the C function.
  */
 final class FunctionGen
@@ -31,6 +31,8 @@ final class FunctionGen
     /** @var list<string> */
     private array $control = [];
     private int $indent = 1;
+    /** Numbers the hidden counters and temporaries that foreach loops use. */
+    private int $loops = 0;
 
     public function __construct(
         private readonly CodeGen $gen,
@@ -196,6 +198,9 @@ final class FunctionGen
             case 'for':
                 $this->forStmt($s);
                 break;
+            case 'foreach':
+                $this->foreachStmt($s);
+                break;
             case 'switch':
                 $this->switchStmt($s);
                 break;
@@ -259,6 +264,110 @@ final class FunctionGen
         $this->emit('}');
     }
 
+    /**
+     * foreach over an array or a string is a for loop over a hidden counter, written as PHP and then
+     * compiled like any other for loop, so break, continue and the type rules need no special cases.
+     * A string is walked up to its zero byte. The subject is read again on every round, so it must
+     * be something that reading cannot change.
+     *
+     * @param array<string,mixed> $s
+     */
+    private function foreachStmt(array $s): void
+    {
+        $subject = $s['subject'];
+        if ($subject['k'] === 'call' && $subject['name'] === 'range') {
+            $this->rangeLoop($s);
+            return;
+        }
+        if (!in_array($subject['k'], ['var', 'prop', 'sprop', 'cconst', 'str'], true)) {
+            $this->err('foreach needs an array or a string held in a variable, a property or a constant', $subject);
+        }
+        $type = $this->expr($subject)->t;
+        if ($type->kind !== 'array' && $type->kind !== 'string') {
+            $this->err('foreach needs an array or a string, not ' . $type->name(), $subject);
+        }
+
+        $line = $s['line'];
+        $var = fn (string $name): array => ['k' => 'var', 'name' => $name, 'line' => $line];
+        $zero = ['k' => 'int', 'v' => 0, 'big' => false, 'line' => $line];
+        $counter = '__each' . $this->loops++;
+        $item = ['k' => 'idx', 'base' => $subject, 'index' => $var($counter), 'line' => $line];
+        $set = fn (string $name, array $value): array => [
+            'k' => 'expr', 'line' => $line,
+            'e' => ['k' => 'assign', 'op' => '=', 't' => $var($name), 'e' => $value, 'line' => $line],
+        ];
+
+        $body = [];
+        if ($s['key'] !== null) {
+            $body[] = $set($s['key'], $var($counter));
+        }
+        $body[] = $set($s['value'], $item);
+        array_push($body, ...$s['body']);
+
+        $cond = $type->kind === 'array'
+            ? ['k' => 'bin', 'op' => '<', 'l' => $var($counter), 'r' => ['k' => 'call', 'name' => 'count', 'args' => [$subject], 'line' => $line], 'line' => $line]
+            : ['k' => 'bin', 'op' => '!==', 'l' => $item, 'r' => $zero, 'line' => $line];
+        $this->forStmt([
+            'k' => 'for',
+            'init' => [['k' => 'assign', 'op' => '=', 't' => $var($counter), 'e' => $zero, 'line' => $line]],
+            'cond' => [$cond],
+            'step' => [['k' => 'incdec', 'op' => '++', 'prefix' => false, 't' => $var($counter), 'line' => $line]],
+            'body' => $body,
+            'line' => $line,
+        ]);
+    }
+
+    /**
+     * foreach (range($first, $last) as $i): both ends are included, and as in PHP it counts down when
+     * $first is larger than $last. The ends are worked out once, and the loop runs a counted number
+     * of times, so the counter cannot wrap around the end value. The one extreme case is a range over
+     * the whole of u64 (0 to UINT64_MAX): it needs 2^64 steps, so it never finishes on its own, and
+     * break or return still leave it.
+     *
+     * @param array<string,mixed> $s
+     */
+    private function rangeLoop(array $s): void
+    {
+        $call = $s['subject'];
+        if (count($call['args']) !== 2) {
+            $this->err('range() needs two arguments here: foreach (range($first, $last) as $i)', $call);
+        }
+        [$a, $b] = array_map(function (array $arg): Ex {
+            $e = $this->expr($arg);
+            $e = $e->char !== null ? $this->charAsInt($e) : $e;
+            return $e->t->isInt() ? $e : $this->err('range() needs whole numbers, not ' . $e->t->name(), $arg);
+        }, $call['args']);
+
+        $type = $this->common($a, $b);
+        $c = $type->c(fn ($class) => $class);
+        $n = $this->loops++;
+        [$first, $last, $span, $step] = ["range{$n}_first", "range{$n}_last", "range{$n}_span", "range{$n}_step"];
+        $this->emit('{');
+        $this->indent++;
+        $this->emit("$c $first = " . $this->convert($a, $type) . ';');
+        $this->emit("$c $last = " . $this->convert($b, $type) . ';');
+        $this->emit("uint64_t $span = $first <= $last ? (uint64_t)$last - (uint64_t)$first : (uint64_t)$first - (uint64_t)$last;");
+        $this->emit("for (uint64_t $step = 0; $step <= $span; $step++) {");
+        $this->indent++;
+        if ($s['key'] !== null) {
+            $this->emit($this->assignLocal($s['key'], new Ex("(int64_t)$step", $this->i64()), $s));
+        }
+        $this->emit($this->assignLocal($s['value'], new Ex("($c)($first <= $last ? (uint64_t)$first + $step : (uint64_t)$first - $step)", $type), $s));
+        $this->indent--;
+        $this->loopBody($s['body']);
+        $this->emit('}');
+        $this->indent--;
+        $this->emit('}');
+    }
+
+    /** C text for storing $value in the variable $name, which the first store creates. */
+    private function assignLocal(string $name, Ex $value, array $node): string
+    {
+        $this->locals[$name] ??= $value->t;
+        $dest = $this->expr(['k' => 'var', 'name' => $name, 'line' => $node['line']]);
+        return $dest->c . ' = ' . $this->coerce($value, $dest->t, $node) . ';';
+    }
+
     /** @param array<string,mixed> $s */
     private function switchStmt(array $s): void
     {
@@ -275,6 +384,9 @@ final class FunctionGen
                     continue;
                 }
                 $e = $this->expr($test);
+                if ($e->char !== null) {
+                    $e = $this->charAsInt($e);
+                }
                 if ($e->value === null) {
                     $this->err("a 'case' must be a constant whole number", $test);
                 }
@@ -350,9 +462,32 @@ final class FunctionGen
         return $a->t->isU64() || $b->t->isU64() ? $this->u64() : $this->i64();
     }
 
+    /** A one-byte string literal where a whole number is wanted becomes that byte: 'a' is 97. */
+    private function charAsInt(Ex $e): Ex
+    {
+        if ($e->charC !== null) {
+            return new Ex($e->charC, $this->i64());
+        }
+        return new Ex($e->char . 'L', $this->i64(), $e->char);
+    }
+
+    /** Apply charAsInt to whichever side is a one-byte literal when the other side is a whole number. */
+    private function charOperands(Ex $l, Ex $r): array
+    {
+        if ($l->t->isInt() && $r->char !== null) {
+            $r = $this->charAsInt($r);
+        } elseif ($r->t->isInt() && $l->char !== null) {
+            $l = $this->charAsInt($l);
+        }
+        return [$l, $r];
+    }
+
     /** One value for a variadic argument list: every argument is passed as a 64-bit word. */
     private function word(Ex $e, array $node): string
     {
+        if ($e->char !== null) {
+            $this->err('a one-character string is ambiguous as a variadic argument: wrap it in u8(...) to pass the character, or in Mem::addr(...) to pass the text', $node);
+        }
         return match ($e->t->kind) {
             'int' => $e->value !== null ? '(uint64_t)' . $this->literalFor($e->value, $e->big, $this->i64()) : '(uint64_t)' . $e->c,
             'bool' => '(uint64_t)' . $e->c,
@@ -367,6 +502,9 @@ final class FunctionGen
     {
         if ($to->kind === 'mixed') {
             return $this->word($e, $node);
+        }
+        if ($to->isInt() && $e->char !== null) {
+            $e = $this->charAsInt($e);
         }
         $from = $e->t;
         if ($to->isInt() && $from->isInt()) {
@@ -429,7 +567,7 @@ final class FunctionGen
     {
         return match ($n['k']) {
             'int' => new Ex($this->literalFor($n['v'], $n['big'], $n['big'] ? $this->u64() : $this->i64()), $n['big'] ? $this->u64() : $this->i64(), $n['v'], $n['big']),
-            'str' => new Ex($this->gen->cString($n['v']), Type::simple('string')),
+            'str' => new Ex($this->gen->cString($n['v']), Type::simple('string'), char: strlen($n['v']) === 1 ? ord($n['v']) : null),
             'null' => new Ex('NULL', Type::simple('null')),
             'bool' => new Ex($n['v'] ? 'true' : 'false', Type::simple('bool')),
             'var' => $this->variable($n),
@@ -446,6 +584,8 @@ final class FunctionGen
             'prop' => $this->property($n),
             'idx' => $this->index($n),
             'new' => $this->newObject($n),
+            'ex' => $n['ex'],
+            'interp' => $this->err('a string with variables in it can only be the first argument of a function marked #[Format], such as Kprintf::printf', $n),
             'arr' => $this->err('an array literal can only initialise a static property or a constant', $n),
             default => $this->err("unsupported expression '{$n['k']}'", $n),
         };
@@ -468,19 +608,23 @@ final class FunctionGen
     private function binary(array $n): Ex
     {
         $op = $n['op'];
+        if ($op === '.') {
+            $text = $this->program->foldString($n, $this->class)
+                ?? $this->err("'.' joins strings at build time, so each side must be a string, a whole-number constant or a class constant: the value of a variable is not known until run time", $n);
+            return new Ex($this->gen->cString($text), Type::simple('string'));
+        }
         if ($op === '&&' || $op === '||') {
             return new Ex('(' . $this->cond($n['l']) . " $op " . $this->cond($n['r']) . ')', Type::simple('bool'));
         }
-        $l = $this->expr($n['l']);
-        $r = $this->expr($n['r']);
+        [$l, $r] = $this->charOperands($this->expr($n['l']), $this->expr($n['r']));
         if (in_array($op, ['==', '!=', '===', '!==', '<', '<=', '>', '>='], true)) {
             return $this->compare($op, $l, $r, $n);
         }
-        if ($op === '/') {
-            $this->err('use intdiv($a, $b) for division: PHP\'s / gives a float', $n);
-        }
         if (!$l->t->isInt() || !$r->t->isInt()) {
             $this->err("'$op' needs whole numbers, not {$l->t->name()} and {$r->t->name()}", $n);
+        }
+        if (($op === '/' || $op === '%') && $r->value === 0) {
+            $this->err('division by zero', $n);
         }
         if ($op === '<<' || $op === '>>') {
             $type = $l->t->isU64() ? $this->u64() : $this->i64();
@@ -520,6 +664,7 @@ final class FunctionGen
             return new Ex('(!' . $this->cond($n['e']) . ')', Type::simple('bool'));
         }
         $e = $this->expr($n['e']);
+        $e = $e->char !== null ? $this->charAsInt($e) : $e;
         if (!$e->t->isInt()) {
             $this->err("'{$n['op']}' needs a whole number, not {$e->t->name()}", $n);
         }
@@ -538,10 +683,13 @@ final class FunctionGen
     private function ternary(array $n): Ex
     {
         $cond = $this->cond($n['c']);
-        $a = $this->expr($n['a']);
-        $b = $this->expr($n['b']);
+        [$a, $b] = $this->charOperands($this->expr($n['a']), $this->expr($n['b']));
         $type = $this->unify($a->t, $b->t, $n);
         $conv = fn (Ex $e): string => $type->isInt() ? $this->convert($e, $type) : ($e->t->kind === 'null' ? 'NULL' : $e->c);
+        if ($a->char !== null && $b->char !== null) {
+            $byte = fn (Ex $e): string => $e->charC ?? $e->char . 'L';
+            return new Ex("($cond ? {$a->c} : {$b->c})", $type, null, false, $a->char, "($cond ? {$byte($a)} : {$byte($b)})");
+        }
         return new Ex("($cond ? {$conv($a)} : {$conv($b)})", $type);
     }
 
@@ -557,7 +705,7 @@ final class FunctionGen
                 $this->err("variable \${$target['name']} is used before it gets a value", $n);
             }
             if (!in_array($value->t->kind, ['int', 'bool', 'string', 'class'], true)) {
-                $this->err("cannot create a variable from {$value->t->name()}: use a typed value such as Cast::u64(0) or a class", $n);
+                $this->err("cannot create a variable from {$value->t->name()}: use a typed value such as u64(0) or a class", $n);
             }
             $this->locals[$target['name']] = $value->t;
         }
@@ -567,11 +715,14 @@ final class FunctionGen
         if ($n['op'] === '=') {
             $c = "{$dest->c} = " . $this->coerce($value, $dest->t, $n['e']);
         } else {
+            if ($dest->t->isInt() && $value->char !== null) {
+                $value = $this->charAsInt($value);
+            }
             if (!$dest->t->isInt() || !$value->t->isInt()) {
                 $this->err("'{$n['op']}' needs whole numbers", $n);
             }
-            if ($n['op'] === '/=') {
-                $this->err('use $x = intdiv($x, $y): PHP\'s / gives a float', $n);
+            if (($n['op'] === '/=' || $n['op'] === '%=') && $value->value === 0) {
+                $this->err('division by zero', $n);
             }
             $isShift = $n['op'] === '<<=' || $n['op'] === '>>=';
             $c = "{$dest->c} {$n['op']} " . $this->convert($value, $isShift ? $this->i64() : $this->common($dest, $value));
@@ -617,27 +768,17 @@ final class FunctionGen
     private function call(array $n): Ex
     {
         $args = $n['args'];
+        if ($n['name'] === 'bool' || (isset(Type::INT_NAMES[$n['name']]) && $n['name'] !== 'int')) {
+            return $this->castCall($n['name'], $args, $n);
+        }
         switch ($n['name']) {
-            case 'ord':
-                if (count($args) !== 1 || $args[0]['k'] !== 'str' || strlen($args[0]['v']) !== 1) {
-                    $this->err('ord() needs one string literal of exactly one character', $n);
-                }
-                $v = ord($args[0]['v']);
-                return new Ex((string) $v . 'L', $this->i64(), $v);
             case 'intdiv':
                 if (count($args) !== 2) {
                     $this->err('intdiv() needs two arguments', $n);
                 }
-                $a = $this->expr($args[0]);
-                $b = $this->expr($args[1]);
-                if (!$a->t->isInt() || !$b->t->isInt()) {
-                    $this->err('intdiv() needs whole numbers', $n);
-                }
-                if ($b->value === 0) {
-                    $this->err('division by zero', $n);
-                }
-                $type = $this->common($a, $b);
-                return new Ex('(' . $this->convert($a, $type) . ' / ' . $this->convert($b, $type) . ')', $type);
+                return $this->binary(['k' => 'bin', 'op' => '/', 'l' => $args[0], 'r' => $args[1], 'line' => $n['line'] ?? 0]);
+            case 'range':
+                $this->err('range() can only be the list of a foreach: foreach (range($first, $last) as $i)', $n);
             case 'count':
                 $a = count($args) === 1 ? $this->expr($args[0]) : $this->err('count() needs one argument', $n);
                 if ($a->t->kind !== 'array') {
@@ -648,7 +789,7 @@ final class FunctionGen
                 }
                 return new Ex($a->t->length . 'L', $this->i64(), $a->t->length);
         }
-        $this->err("unknown function '{$n['name']}()': only ord, intdiv and count exist, everything else is a class method", $n);
+        $this->err("unknown function '{$n['name']}()': only u8() to i64(), bool(), intdiv(), count() and range() exist, everything else is a class method", $n);
     }
 
     /** @param array<string,mixed> $n */
@@ -698,6 +839,85 @@ final class FunctionGen
     }
 
     /**
+     * u8($x), i32($x), u64(0), bool($x) and the rest: cut a whole number down to that type. This is
+     * the only way to say how many bits a number has, and how a variable gets a type other than int.
+     *
+     * @param list<array<string,mixed>> $args
+     * @param array<string,mixed> $n
+     */
+    private function castCall(string $name, array $args, array $n): Ex
+    {
+        if (count($args) !== 1) {
+            $this->err("$name() needs one argument", $n);
+        }
+        $a = $this->expr($args[0]);
+        if ($a->char !== null) {
+            $a = $this->charAsInt($a);
+        }
+        if (!$a->t->isInt()) {
+            $this->err("$name() needs a whole number, not {$a->t->name()}", $n);
+        }
+        if ($name === 'bool') {
+            return new Ex('(' . $this->convert($a, $this->i64()) . ' != 0)', Type::simple('bool'));
+        }
+        $to = Type::named($name);
+        return new Ex($this->convert($a, $to), $to, $a->value !== null ? $this->wrapValue($a->value, $to) : null);
+    }
+
+    /**
+     * "free: $n pages" given to a #[Format] function such as Kprintf::printf becomes the format
+     * "free: %lu pages" followed by the value of $n, so no string is built at run time. A % in the
+     * text is doubled so it stays a plain %.
+     *
+     * @param list<array<string,mixed>> $nodes
+     * @param array<string,mixed> $at
+     * @return list<array<string,mixed>> the arguments again: the format, then one value for each variable
+     */
+    private function formatArguments(ClassInfo $cls, MethodInfo $m, array $nodes, array $at): array
+    {
+        $first = $m->params[0] ?? null;
+        $last = $m->params[count($m->params) - 1] ?? null;
+        if ($first === null || $first->type->kind !== 'string' || $first->variadic || !$last->variadic) {
+            $this->err("{$cls->short}::{$m->name}() is marked #[Format], so it must take a string followed by variadic arguments", $at);
+        }
+        if (count($nodes) > 1) {
+            $this->err('a string with variables in it cannot be followed by more arguments: put every value inside the string', $nodes[1]);
+        }
+        $format = '';
+        $values = [];
+        foreach ($nodes[0]['parts'] as $part) {
+            if (is_string($part)) {
+                $format .= str_replace('%', '%%', $part);
+                continue;
+            }
+            [$spec, $value] = $this->formatValue($this->expr($part), $part);
+            $format .= $spec;
+            $values[] = ['k' => 'ex', 'ex' => $value, 'line' => $part['line']];
+        }
+        return [['k' => 'str', 'v' => $format, 'line' => $nodes[0]['line']], ...$values];
+    }
+
+    /**
+     * The printf conversion for a value that is put in a string, and the value to pass with it.
+     * Numbers are printed in decimal. A bool becomes the text true or false, and an object its address.
+     * A number is never printed as a character: use %c in a printf format for that.
+     *
+     * @param array<string,mixed> $node
+     * @return array{string, Ex}
+     */
+    private function formatValue(Ex $e, array $node): array
+    {
+        $t = $e->t;
+        return match ($t->kind) {
+            'int' => [$t->bits === 64 ? ($t->signed ? '%ld' : '%lu') : ($t->signed ? '%d' : '%u'), $e],
+            'bool' => ['%s', new Ex("({$e->c} ? \"true\" : \"false\")", Type::simple('string'))],
+            'string' => ['%s', new Ex($e->c, $t)],
+            'class' => ['%p', $e],
+            default => $this->err('cannot put ' . $t->name() . ' in a string', $node),
+        };
+    }
+
+    /**
      * The C argument list for a call. Variadic arguments become a count and an array of 64-bit
      * words: f("x", 1, 2) calls f("x", 2, (const uint64_t[]){1, 2}).
      *
@@ -706,6 +926,9 @@ final class FunctionGen
      */
     private function callArgs(ClassInfo $cls, MethodInfo $m, array $nodes, ?string $self, array $at): string
     {
+        if (isset($m->attrs['Format']) && ($nodes[0]['k'] ?? '') === 'interp') {
+            $nodes = $this->formatArguments($cls, $m, $nodes, $at);
+        }
         $out = $self === null ? [] : [$self];
         $fixed = array_values(array_filter($m->params, fn (ParamInfo $p): bool => !$p->variadic));
         $variadic = count($m->params) > count($fixed);
@@ -754,16 +977,6 @@ final class FunctionGen
                 $this->err('Mem::addr() needs an object, an array or a string, not ' . $a->t->name(), $n);
             }
             return new Ex('(uint64_t)(uintptr_t)' . $a->c, $this->u64());
-        }
-        if ($cls->short === 'Cast') {
-            if ($m->name === 'bool') {
-                return new Ex('(' . $this->convert($a, $this->i64()) . ' != 0)', Type::simple('bool'));
-            }
-            if (!$a->t->isInt()) {
-                $this->err("Cast::{$m->name}() needs a whole number, not {$a->t->name()}", $n);
-            }
-            $to = Type::named($m->name) ?? $this->err("unknown cast Cast::{$m->name}()", $n);
-            return new Ex($this->convert($a, $to), $to, $a->value !== null ? $this->wrapValue($a->value, $to) : null);
         }
         $this->err("unknown intrinsic $key()", $n);
     }
@@ -842,7 +1055,9 @@ final class FunctionGen
         }
         $const = $this->gen->constant($cls, $n['name'], $n);
         $this->access($const->vis, $cls, "constant {$cls->short}::{$const->name}", $n);
-        return new Ex($const->c, $const->type, $const->value, $const->big);
+        $text = $const->type->kind === 'string' ? $this->program->foldString($const->expr, $cls) : null;
+        $isChar = $text !== null && strlen($text) === 1;
+        return new Ex($const->c, $const->type, $const->value, $const->big, $isChar ? ord($text) : null);
     }
 
     /** @param array<string,mixed> $n */

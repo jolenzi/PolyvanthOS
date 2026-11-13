@@ -22,3 +22,18 @@ All notable changes to this project are documented here. The format is based on
 - Physical page allocator (bitmap), with a boot-time selftest.
 - Kernel heap (`kmalloc` and `kfree`, first fit with splitting and merging), with a boot-time
   selftest.
+
+### Changed
+
+- In the kernel's PHP subset, `/` and `/=` now divide whole numbers (rounding toward zero), so
+  `intdiv($a, $b)` is no longer needed. `intdiv` still works.
+- A one-character string such as `'a'` or `"\n"` is the number 97 (or 10) wherever a whole number is
+  wanted, so `ord()` is gone: write `$c === '%'` and `case 'x':`.
+- Number conversions are written `u8($x)`, `i32($x)`, `u64(0)` and so on, built into the compiler,
+  instead of `Cast::u8($x)`. The `Cast` class is gone.
+- `foreach` works over arrays (`foreach ($a as $x)` and `foreach ($a as $i => $x)`), over the bytes
+  of a string, and over `range($first, $last)`. It compiles to a plain C `for` loop.
+- Strings can be joined with `.` when everything is known at build time: literals, whole-number
+  constants and class constants. `'size ' . self::SIZE` is one constant string.
+- A string with variables in it (`"free: $n pages"`) can be given to a function marked `#[Format]`,
+  such as `Kprintf::printf`. The compiler turns it into a printf format and its arguments.

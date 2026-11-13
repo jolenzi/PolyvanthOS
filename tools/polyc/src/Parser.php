@@ -22,9 +22,10 @@ final class Parser
         '||' => 1, '&&' => 2, '|' => 3, '^' => 4, '&' => 5,
         '==' => 6, '!=' => 6, '===' => 6, '!==' => 6,
         '<' => 7, '<=' => 7, '>' => 7, '>=' => 7,
-        '<<' => 8, '>>' => 8,
-        '+' => 9, '-' => 9,
-        '*' => 10, '/' => 10, '%' => 10,
+        '.' => 8,
+        '<<' => 9, '>>' => 9,
+        '+' => 10, '-' => 10,
+        '*' => 11, '/' => 11, '%' => 11,
     ];
 
     private const ASSIGN_OPS = ['=', '+=', '-=', '*=', '/=', '%=', '&=', '|=', '^=', '<<=', '>>='];
@@ -431,6 +432,8 @@ final class Parser
                 return ['k' => 'do', 'cond' => $cond, 'body' => $body, 'line' => $line];
             case 'for':
                 return $this->parseFor();
+            case 'foreach':
+                return $this->parseForeach();
             case 'switch':
                 return $this->parseSwitch();
             case 'break':
@@ -446,7 +449,6 @@ final class Parser
                 $e = $this->isOp(';') ? null : $this->parseExpr();
                 $this->expect(';');
                 return ['k' => 'return', 'e' => $e, 'line' => $line];
-            case 'foreach':
             case 'try':
             case 'throw':
             case 'echo':
@@ -507,6 +509,41 @@ final class Parser
         return ['k' => 'for', 'init' => $parts[0], 'cond' => $parts[1], 'step' => $parts[2], 'body' => $this->parseBody(), 'line' => $line];
     }
 
+    /** foreach (SUBJECT as $value) and foreach (SUBJECT as $key => $value). */
+    private function parseForeach(): array
+    {
+        $line = $this->line();
+        $this->next();
+        $this->expect('(');
+        $subject = $this->parseExpr();
+        $this->expectWord('as');
+        $value = $this->parseForeachVariable();
+        $key = null;
+        if ($this->accept('=>')) {
+            $key = $value;
+            $value = $this->parseForeachVariable();
+        }
+        if ($key === $value) {
+            $this->fail("foreach cannot use \${$value} for both the key and the value");
+        }
+        $this->expect(')');
+        return ['k' => 'foreach', 'subject' => $subject, 'key' => $key, 'value' => $value, 'body' => $this->parseBody(), 'line' => $line];
+    }
+
+    /** The name (without the $) of a foreach variable. */
+    private function parseForeachVariable(): string
+    {
+        if ($this->isOp('&')) {
+            $this->fail('foreach cannot take its values by reference: references are not supported');
+        }
+        $token = $this->peek();
+        if ($token === null || !$token->is(T_VARIABLE) || $token->text === '$this') {
+            $this->fail('foreach needs a plain variable to put each value in');
+        }
+        $this->next();
+        return substr($token->text, 1);
+    }
+
     /** @return array<string,mixed> */
     private function parseSwitch(): array
     {
@@ -554,6 +591,9 @@ final class Parser
     {
         $left = $this->parseTernary();
         $token = $this->peek();
+        if ($token !== null && $token->text === '.=') {
+            $this->fail("'.=' is not supported: strings are joined with '.' at build time, so a string never grows");
+        }
         if ($token !== null && in_array($token->text, self::ASSIGN_OPS, true) && !$token->is(T_VARIABLE)) {
             if (!in_array($left['k'], ['var', 'prop', 'sprop', 'idx'], true)) {
                 $this->fail('cannot assign to this expression');
@@ -608,7 +648,7 @@ final class Parser
         $token = $this->peek() ?? $this->fail('unexpected end of file');
         $line = $token->line;
         if ($token->is([T_INT_CAST, T_BOOL_CAST, T_STRING_CAST, T_DOUBLE_CAST, T_ARRAY_CAST, T_OBJECT_CAST])) {
-            $this->fail("casts are not supported: use Cast::u8(), Cast::u64() and so on");
+            $this->fail("casts are not supported: use u8(), u64() and so on");
         }
         if (in_array($token->text, ['!', '-', '+', '~'], true) && !$token->is(T_VARIABLE)) {
             $this->next();
@@ -690,8 +730,11 @@ final class Parser
         if ($token->is(T_CONSTANT_ENCAPSED_STRING)) {
             return ['k' => 'str', 'v' => $this->unquote($token), 'line' => $line];
         }
-        if ($token->text === '"' || $token->is([T_START_HEREDOC, T_ENCAPSED_AND_WHITESPACE])) {
-            $this->fail('string interpolation and heredocs are not supported, use plain strings', $line);
+        if ($token->text === '"') {
+            return $this->parseInterpolated($line);
+        }
+        if ($token->is([T_START_HEREDOC, T_ENCAPSED_AND_WHITESPACE])) {
+            $this->fail('heredocs are not supported, use plain strings', $line);
         }
         if ($token->text === '(') {
             $e = $this->parseExpr();
@@ -762,7 +805,7 @@ final class Parser
         }
         if ($this->isOp('(')) {
             if ($token->is([T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED])) {
-                $this->fail('only the built-in functions ord, intdiv and count can be called');
+                $this->fail('only the built-in functions u8() to i64(), bool(), intdiv(), count() and range() can be called');
             }
             return ['k' => 'call', 'name' => $lower, 'args' => $this->parseArgs(), 'line' => $line];
         }
@@ -809,12 +852,56 @@ final class Parser
         };
     }
 
+    /**
+     * A double-quoted string with variables in it, after its opening quote: "free: $n pages",
+     * "size $this->size" or "first {$list[0]}". The result is a list of parts, each one a piece of
+     * text or an expression. Only a function marked #[Format] can use the result.
+     *
+     * @return array<string,mixed>
+     */
+    private function parseInterpolated(int $line): array
+    {
+        $parts = [];
+        while (true) {
+            $token = $this->peek() ?? $this->fail('unexpected end of file inside a string', $line);
+            if ($token->text === '"') {
+                $this->next();
+                return ['k' => 'interp', 'parts' => $parts, 'line' => $line];
+            }
+            $this->next();
+            if ($token->is(T_ENCAPSED_AND_WHITESPACE)) {
+                $parts[] = $this->unescape($token->text);
+            } elseif ($token->is(T_VARIABLE)) {
+                $part = ['k' => 'var', 'name' => substr($token->text, 1), 'line' => $token->line];
+                if ($this->isOp('[')) {
+                    $this->fail('write an array element in a string as {$name[index]}, with braces', $token->line);
+                }
+                if ($this->isOp('->') && $this->peek(1)?->is(T_STRING)) {
+                    $this->next();
+                    $part = ['k' => 'prop', 'obj' => $part, 'name' => $this->next()->text, 'line' => $token->line];
+                }
+                $parts[] = $part;
+            } elseif ($token->is(T_CURLY_OPEN)) {
+                $parts[] = $this->parseExpr();
+                $this->expect('}');
+            } else {
+                $this->fail('this kind of variable in a string is not supported: write $name, $object->property or {$expression}', $token->line);
+            }
+        }
+    }
+
     private function unquote(\PhpToken $token): string
     {
         $raw = substr($token->text, 1, -1);
         if ($token->text[0] === "'") {
             return strtr($raw, ["\\\\" => "\\", "\\'" => "'"]);
         }
+        return $this->unescape($raw);
+    }
+
+    /** The text of a double-quoted string, with its backslash escapes turned into the characters. */
+    private function unescape(string $raw): string
+    {
         return (string) preg_replace_callback(
             '/\\\\(?:([nrtvef\\\\$"])|([0-7]{1,3})|x([0-9A-Fa-f]{1,2})|u\{([0-9A-Fa-f]+)\})/',
             static function (array $m): string {

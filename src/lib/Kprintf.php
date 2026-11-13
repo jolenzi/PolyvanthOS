@@ -6,7 +6,6 @@ declare(strict_types=1);
 
 namespace Polyvanthos\Lib;
 
-use Polyvanthos\Cast;
 use Polyvanthos\Drivers\Serial;
 use Polyvanthos\Mem;
 
@@ -17,8 +16,8 @@ final class Kprintf
     // All kprintf output goes through here, so a framebuffer or log buffer can be added later.
     private static function emit(u8 $c): void
     {
-        if ($c === ord("\n")) {
-            Serial::putc(ord("\r")); // serial terminals need CR+LF
+        if ($c === "\n") {
+            Serial::putc("\r"); // serial terminals need CR+LF
         }
         Serial::putc($c);
     }
@@ -38,7 +37,7 @@ final class Kprintf
             $remainder = $value % $base;
             Mem::write8($buffer + $counter, self::DIGITS[$remainder]);
             $counter++;
-            $value = intdiv($value, $base);
+            $value /= $base;
         } while ($value !== 0);
 
         // Print in reverse
@@ -50,9 +49,9 @@ final class Kprintf
     /** Print $value in base 10 with a leading '-' if negative. */
     public static function putInt(int $value): void
     {
-        $magnitude = Cast::u64($value);
+        $magnitude = u64($value);
         if ($value < 0) {
-            self::emit(ord('-'));
+            self::emit('-');
             // Negate in unsigned arithmetic: well-defined even for the smallest number.
             $magnitude = 0 - $magnitude;
         }
@@ -64,6 +63,7 @@ final class Kprintf
      * %d, %u and %x also accept the l and ll length modifiers, for example %lu or %llx.
      * Every argument is passed as one 64-bit word. A %s argument is the address of the text.
      */
+    #[Format]
     public static function printf(string $fmt, mixed ...$args): void
     {
         $next = 0; // index of the next argument
@@ -71,7 +71,7 @@ final class Kprintf
         for ($p = 0; $fmt[$p] !== 0; ++$p) {
             $c = $fmt[$p];
 
-            if ($c !== ord('%')) {
+            if ($c !== '%') {
                 // Ordinary character
                 self::emit($c);
                 continue;
@@ -85,7 +85,7 @@ final class Kprintf
 
             // Count the 'l' characters
             $longCount = 0;
-            while ($fmt[$p] === ord('l')) {
+            while ($fmt[$p] === 'l') {
                 ++$longCount;
                 ++$p;
             }
@@ -96,35 +96,35 @@ final class Kprintf
 
             $conversion = $fmt[$p];
             switch ($conversion) {
-                case ord('c'):
-                    self::emit(Cast::u8($args[$next++]));
+                case 'c':
+                    self::emit(u8($args[$next++]));
                     break;
-                case ord('s'):
+                case 's':
                     self::putString($args[$next++]);
                     break;
-                case ord('d'):
+                case 'd':
                     // Without an l the argument is an int (32 bits), so sign-extend it.
-                    self::putInt($longCount === 0 ? Cast::i32($args[$next]) : Cast::i64($args[$next]));
+                    self::putInt($longCount === 0 ? i32($args[$next]) : i64($args[$next]));
                     $next++;
                     break;
-                case ord('u'):
-                    self::putUint($longCount === 0 ? Cast::u32($args[$next]) : $args[$next], 10);
+                case 'u':
+                    self::putUint($longCount === 0 ? u32($args[$next]) : $args[$next], 10);
                     $next++;
                     break;
-                case ord('x'):
-                    self::putUint($longCount === 0 ? Cast::u32($args[$next]) : $args[$next], 16);
+                case 'x':
+                    self::putUint($longCount === 0 ? u32($args[$next]) : $args[$next], 16);
                     $next++;
                     break;
-                case ord('p'):
-                    self::emit(ord('0'));
-                    self::emit(ord('x'));
+                case 'p':
+                    self::emit('0');
+                    self::emit('x');
                     self::putUint($args[$next++], 16);
                     break;
-                case ord('%'):
-                    self::emit(ord('%'));
+                case '%':
+                    self::emit('%');
                     break;
                 default:
-                    self::emit(ord('%'));
+                    self::emit('%');
                     self::emit($conversion);
                     break;
             }

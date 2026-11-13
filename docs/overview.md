@@ -30,7 +30,6 @@ src/
   Kernel.php                entry point, the boot sequence above
   SelfTest.php              boot-time checks for kprintf
   Mem.php                   read and write memory at an address
-  Cast.php                  explicit conversions between number sizes
   arch/x86_64/
     Port.php                in/out instructions (outb, inb)
     CPU.php                 haltForever() and the other CPU instructions

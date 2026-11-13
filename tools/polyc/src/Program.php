@@ -261,6 +261,57 @@ final class Program
         return $value;
     }
 
+    /**
+     * Fold the value of the class constant that $node names. A constant that is private to another
+     * class, or that is defined in terms of itself, is not a constant here, so the result is null
+     * and the normal code path reports the problem.
+     *
+     * @param array<string,mixed> $node
+     * @param callable(array<string,mixed>, ClassInfo): (string|int|null) $fold
+     */
+    private function foldConstant(array $node, ClassInfo $ctx, callable $fold): string|int|null
+    {
+        $class = $node['cls'] === 'self' ? $ctx : $this->find($node['cls'], $ctx->file, $node['line']);
+        $const = $class->consts[$node['name']] ?? null;
+        if ($const === null || $const->folding || ($const->vis !== 'public' && $class !== $ctx)) {
+            return null;
+        }
+        $const->folding = true;
+        try {
+            return $fold($const->expr, $class);
+        } finally {
+            $const->folding = false;
+        }
+    }
+
+    /**
+     * The text of a constant string expression, or null if it is not one. That is a string literal, a
+     * whole-number constant (written in decimal), a class constant holding either, or any of those
+     * joined with '.'. Everything is known at build time, so the result is one string in the C code.
+     *
+     * @param array<string,mixed> $node
+     */
+    public function foldString(array $node, ClassInfo $ctx): ?string
+    {
+        switch ($node['k']) {
+            case 'str':
+                return $node['v'];
+            case 'int':
+                return $node['big'] ? sprintf('%u', $node['v']) : (string) $node['v'];
+            case 'bin':
+                if ($node['op'] === '.') {
+                    $left = $this->foldString($node['l'], $ctx);
+                    $right = $left === null ? null : $this->foldString($node['r'], $ctx);
+                    return $right === null ? null : $left . $right;
+                }
+                break;
+            case 'cconst':
+                return $this->foldConstant($node, $ctx, fn (array $e, ClassInfo $c): ?string => $this->foldString($e, $c));
+        }
+        $value = $this->foldInt($node, $ctx);
+        return $value === null ? null : (string) $value;
+    }
+
     /** Evaluate a whole-number constant expression, or return null if it is not one. */
     public function foldInt(array $node, ClassInfo $ctx): ?int
     {
@@ -286,13 +337,13 @@ final class Program
                 }
                 $v = match ($node['op']) {
                     '+' => $l + $r, '-' => $l - $r, '*' => $l * $r, '<<' => $l << $r, '>>' => $l >> $r,
+                    '/' => $r === 0 || ($l === PHP_INT_MIN && $r === -1) ? null : intdiv($l, $r),
+                    '%' => $r === 0 || $r === -1 ? null : $l % $r,
                     '|' => $l | $r, '&' => $l & $r, '^' => $l ^ $r, default => null,
                 };
                 return is_int($v) ? $v : null;
             case 'cconst':
-                $class = $node['cls'] === 'self' ? $ctx : $this->find($node['cls'], $ctx->file, $node['line']);
-                $const = $class->consts[$node['name']] ?? null;
-                return $const === null ? null : $this->foldInt($const->expr, $class);
+                return $this->foldConstant($node, $ctx, fn (array $e, ClassInfo $c): ?int => $this->foldInt($e, $c));
         }
         return null;
     }

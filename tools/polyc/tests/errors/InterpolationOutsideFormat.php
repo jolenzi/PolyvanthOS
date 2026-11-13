@@ -1,17 +1,17 @@
 <?php
 // SPDX-FileCopyrightText: 2026 PolyvanthOS contributors
 // SPDX-License-Identifier: GPL-2.0-only
-// error: 'foreach' is not supported
+// error: can only be the first argument of a function marked #[Format]
 
 declare(strict_types=1);
 
 namespace Test;
 
-final class NoForeach
+final class InterpolationOutsideFormat
 {
     public static function main(): void
     {
-        foreach ([1, 2] as $x) {
-        }
+        $count = 3;
+        Host::str("items: $count");
     }
 }

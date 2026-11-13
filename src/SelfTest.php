@@ -22,7 +22,7 @@ final class SelfTest
 
         Kprintf::printf("literal text\n"); // literal text
         Kprintf::printf("%%\n"); // %
-        Kprintf::printf("%c%c%c\n", ord('a'), ord('b'), ord('c')); // abc
+        Kprintf::printf("%c%c%c\n", u8('a'), u8('b'), u8('c')); // abc
         Kprintf::printf("%s\n", 'hello'); // hello
         Kprintf::printf("%s\n", null); // (null)
 

@@ -30,6 +30,12 @@ final class Host
     {
     }
 
+    /** A small printf that follows Kprintf's rules, so the tests can use string interpolation. */
+    #[Format]
+    public static function format(string $fmt, mixed ...$args): void
+    {
+    }
+
     public static function alloc(u64 $size): u64
     {
         return 0;

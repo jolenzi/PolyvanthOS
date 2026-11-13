@@ -16,7 +16,7 @@ That has a few consequences:
   strings you can join) does not exist here. The compiler refuses it with a message instead of
   guessing.
 - The rules that differ from PHP are on this page. The main ones are that numbers have a fixed
-  size, `/` is not allowed (use `intdiv`), and a variable gets its type from the first value
+  size, `/` divides whole numbers (so `7 / 2` is `3`), and a variable gets its type from the first value
   stored in it.
 - Because the code is PHP-shaped, it reads like PHP: classes, static methods, constants, typed
   properties, `null`, `new`.
@@ -73,23 +73,29 @@ Everything is a whole number, and all the arithmetic is done in 64 bits:
 - A literal is written again for each type it is used as. `0x8000000000000000` is a valid `u64`.
   Decimal literals must fit in a signed 64-bit number; write bigger ones in hex.
 
-Operators: `+ - * % & | ^ ~ << >>`, the comparisons `== != === !== < <= > >=` (`===` and `==`
+Operators: `+ - * / % & | ^ ~ << >>`, the comparisons `== != === !== < <= > >=` (`===` and `==`
 mean the same here), `&& || !`, `?:` with three parts, and the assignment forms of the operators
 above.
 
-**There is no `/`.** In PHP, `7 / 2` is `3.5`, a float, and the kernel has none. polyc refuses `/` and
-`/=`. Use `intdiv($a, $b)`, which is the same as PHP's `intdiv` and divides whole numbers
-(rounding toward zero).
+**`/` divides whole numbers.** In PHP, `7 / 2` is `3.5`, a float. The kernel has no floats, so here
+`7 / 2` is `3`: the result is rounded toward zero, the same as C, and `-7 / 2` is `-3`. `/=` works
+too. This is a deliberate difference from PHP, and it is the main reason the sources would behave
+differently if you ran them under a real PHP interpreter. Dividing by a constant zero is a compile
+error. Dividing by a variable that is zero at run time (or `i64` minimum by `-1`) is not checked: the
+CPU raises a divide error (#DE), which the kernel reports as an exception. `/` and `%` also work in
+constant expressions such as array sizes and case labels. `intdiv($a, $b)` still works and means
+the same thing as `$a / $b`.
 
-**Explicit conversions** use the `Cast` class: `Cast::u8($x)`, `Cast::i32($x)`, `Cast::u64($x)`,
-and `Cast::bool($x)` (true if not zero). PHP's own `(int)` casts are refused, because they would
-not say how many bits.
+**Explicit conversions** are written like function calls named after the type: `u8($x)`,
+`i32($x)`, `u64($x)` and the rest, and `bool($x)` (true if not zero). They are built into the
+compiler, and PHP does not mind the names when it reads the file. PHP's own `(int)` casts are
+refused, because they would not say how many bits.
 
 **Variables have no declaration.** A variable gets the type of the first value stored in it:
 
 ```php
 $a = 3;                 // int, which is i64
-$b = Cast::u64(0);      // u64
+$b = u64(0);           // u64
 $c = ISR::stub(3);      // u64, because that is what stub returns
 ```
 
@@ -100,13 +106,39 @@ A variable that is read before anything is stored in it is an error. A name can'
 ## Strings
 
 A `string` is a pointer to bytes that end in a zero, and it never changes. Literals are what you
-get: `'text'` and `"text\n"` (with the usual PHP escapes in double quotes). There is no `.` to join
-strings, no interpolation like `"$x"`, and no heredocs.
+get: `'text'` and `"text\n"` (with the usual PHP escapes in double quotes). Strings can be joined
+with `.`, but only at build time (see below). A string with variables in it, like `"free: $n pages"`,
+works only for functions marked `#[Format]` (see below). There are no heredocs.
 
 - `$s[$i]` is the byte at that position, as a `u8`. A string is compared by looking at its bytes,
   as `Serial::puts` does. Two strings can't be compared with `===`.
-- `ord('a')` is the number 97, worked out at build time. It works only on a string literal of one
-  character, and it is how you write a character in a `switch` or a comparison.
+- **A one-character string is also a character.** Where a whole number is wanted, `'a'` is the
+  number 97, worked out at build time. So you write `$c === '%'`, `case 'x':`, `$digit - '0'` and
+  `Serial::putc("\n")`, with no `ord()`. This works for a literal, or a class constant whose value
+  is a literal, such as `const NEWLINE = "\n"`. Where a string is wanted, it is still a string, so
+  `Serial::puts('a')` prints the letter.
+  Two things to watch for. A *variable* takes the type of the first value stored in it, so
+  `$c = 'a'` makes `$c` a string, not a number; write `$c = u8('a')` if you want the number.
+  And a variadic argument has no type to tell the compiler which you mean, so
+  `Kprintf::printf('%c', 'a')` is an error: write `u8('a')` to pass the character or
+  `Mem::addr('a')` to pass the text.
+- **`.` joins constants at build time.** Each side must be a string literal, a whole-number constant
+  (written in decimal), a class constant that holds either, or another join. So
+  `'page size ' . self::PAGE_SIZE . ' bytes'` becomes one string in the C code and costs nothing at
+  run time. A variable can't be joined: its value isn't known until the program runs, and there is
+  nowhere to build a new string. `.=` is refused for the same reason. As in PHP 8, `+` and `-` are
+  worked out before `.`, so `'n=' . 1 + 2` is `'n=3'`.
+- **Variables in a string work for `#[Format]` functions.** `Kprintf::printf` is one: its first
+  parameter is a printf format, and the values follow as variadic arguments. Given
+  `Kprintf::printf("Usable memory: $mebibytes MiB ($pages pages)\n")`, the compiler writes the format
+  `"Usable memory: %lu MiB (%lu pages)\n"` and passes the two values, so nothing is built at run time.
+  You can write `$name`, `$object->property` and `{$expression}` (such as `{$list[0]}`); `$list[0]`
+  without braces is refused. The conversion comes from the type: whole numbers in decimal, a `bool`
+  as `true` or `false`, a string as text (`(null)` for null), an object as its address. A number is
+  never printed as a character or in hex: for that write a printf format yourself (`%c`, `%lx`).
+  A `%` in the text is printed as a `%`. Such a string can't be followed by more printf arguments,
+  can't be joined with `.`, and is an error anywhere except as the first argument of a `#[Format]`
+  function.
 - The address of a string, if you need it, is `Mem::addr('text')`. That is how `Kprintf` handles
   `%s` and `(null)`.
 
@@ -206,21 +238,50 @@ Scratch space in a function, such as the digits buffer in `Kprintf::putUint`, co
 ## Statements
 
 `if`, `elseif`, `else`, `while`, `do ... while`, `for` (with commas in the first and last part),
-`switch`, `break`, `continue`, `return`, blocks, and expressions.
+`foreach`, `switch`, `break`, `continue`, `return`, blocks, and expressions.
 
-- `switch` is on whole numbers, and each `case` is a constant (a number, `ord('x')` or a class
-  constant). It falls through like C and PHP.
+- `switch` is on whole numbers, and each `case` is a constant (a number, a character such as
+  `'x'`, or a class constant). It falls through like C and PHP.
 - `continue` has to be directly inside a loop. In PHP, `continue` inside a `switch` quietly acts
   like `break`, so polyc doesn't allow it and nobody is surprised.
 - `break` and `continue` take no level.
 
-Not available: `foreach`, `try`/`catch`/`throw`, `goto`, `echo`, `unset`, `global`, closures,
+### `foreach`
+
+`foreach` goes through the elements of an array, the bytes of a string, or a `range`:
+
+```php
+foreach (self::$numbers as $n) { $total += $n; }          // each element
+foreach (self::NAMES as $i => $name) { /* ... */ }         // with the index as the key
+foreach ($text as $c) { Serial::putc($c); }                // each byte of a string, as a u8
+foreach (range(0, 31) as $vector) { /* 0, 1, ... 31 */ }   // both ends are included
+```
+
+- It is a `for` loop over a hidden counter, so `break`, `continue` and the number rules work as in
+  any other loop. The loop variable lasts after the loop, as in PHP, and takes the type of the
+  first value stored in it. The key is the position (an `int`), starting at 0.
+- **The list has to be a variable, a property, a constant or a string literal.** It is read again
+  on every round, so something like `foreach (self::make() as $x)` is an error. Arrays are the
+  fixed-size arrays described above, and a variadic parameter such as `$args` counts as one.
+- **A string is walked up to its zero byte.** Real PHP can't loop over a string, so this is an
+  addition. It replaces `for ($i = 0; $s[$i] !== 0; $i++)`.
+- **An array of structs gives you a pointer to each element**, so `$counter->step = 5` changes the
+  element itself. For an array of numbers you get a copy of the number, as in PHP.
+- **By reference (`as &$x`) is not supported.**
+- **`range($first, $last)` works as in PHP:** both ends are included, and it counts down when
+  `$first` is larger than `$last`. That makes `range(0, $n - 1)` a trap when `$n` is 0, because it
+  then runs for 0 and -1 (and with a `u64` `$n` the `- 1` wraps around to a huge number). Use it
+  with constants, or use `for` when counting up to a variable. Unsigned numbers count down safely
+  and stop at 0. `range()` is only allowed as the list of a `foreach`, and takes no step.
+
+Not available: `try`/`catch`/`throw`, `goto`, `echo`, `unset`, `global`, closures,
 `static` variables, `list`, `match`, `??`, `<=>`, `**`, references and the `.` operator.
 
 ## Calling functions
 
-Only methods can be called, as `Class::method()` or `$object->method()`, plus three built-in
-functions: `ord`, `intdiv` and `count`.
+Only methods can be called, as `Class::method()` or `$object->method()`, plus a few built-in
+functions: `intdiv`, `count`, the conversions `u8()` to `i64()` and `bool()`, and `range()`
+(which only works inside `foreach`).
 
 - Arguments are stored into the parameter types, so a number is cut down to fit.
 - Parameters can have default values that are constants. Only `int`, `bool` and `string` parameters
@@ -239,8 +300,8 @@ PHP cannot say "run this CPU instruction". Three attributes cover everything the
   real function is written in C in a header under `native/`, with the name the compiler would give
   it (`Arch_X86_64_Port_outb`). The compiler type-checks calls to it from the PHP signature.
 - `#[Header('x86_64.h')]` on a class whose `#[Native]` methods live in that header.
-- `#[Intrinsic]` for the few things the compiler writes itself: `Mem::addr`, `Mem::stack` and
-  everything in `Cast`.
+- `#[Intrinsic]` for the few things the compiler writes itself: `Mem::addr`, `Mem::stack`.
+  (The conversions `u8()`, `u64()` and so on are built into the compiler and need no attribute.)
 
 `#[Export('exception_handler')]` goes the other way: it gives a PHP method a plain C name, so
 assembly (or Limine, in the case of `kmain`) can call it.
@@ -261,6 +322,7 @@ assembly (or Limine, in the case of `kmain`) can call it.
 | `Section('name')` | static property | Put it in this section of the file |
 | `Used` | static property | Keep it even if nothing reads it |
 | `Volatile` | static property | Something else (Limine, the hardware) may change it |
+| `Format` | method | The first parameter is a printf format and the last is variadic, so a string with variables in it can be passed as the format |
 
 ## Mistakes the compiler catches
 
@@ -268,7 +330,7 @@ Every message has the file and line, like `src/drivers/Serial.php:58: error: ...
 
 - using a variable before it has a value;
 - passing a string where a number is expected, or a number where an object is expected;
-- `/`, a float, a PHP cast, `foreach`, string interpolation and the other unsupported things above;
+- a float, a PHP cast, string interpolation and the other unsupported things above;
 - using a private member from another class, calling a method that doesn't exist, passing too many
   arguments;
 - a `switch` case that isn't constant, `continue` inside a `switch`;

@@ -19,7 +19,7 @@ final class Arith
     public static function main(): void
     {
         $a = 3;
-        $b = Cast::u64(4);
+        $b = u64(4);
         Host::int($a + $b);
         Host::str(' ');
         Host::int($a - 4);
@@ -27,24 +27,24 @@ final class Arith
         Host::uint(self::BIG);
         Host::nl();
 
-        $c = Cast::u32(0xFFFFFFFF);
+        $c = u32(0xFFFFFFFF);
         Host::uint(self::SHIFTED);
         Host::str(' ');
-        Host::int(Cast::u8($c));
+        Host::int(u8($c));
         Host::str(' ');
-        Host::int(Cast::u8(256));
+        Host::int(u8(256));
         Host::str(' ');
-        Host::int(Cast::i8(0x80));
+        Host::int(i8(0x80));
         Host::nl();
 
         Host::int((5 & 3) | (4 ^ 4));
         Host::str(' ');
-        Host::int(intdiv(1, 2));
+        Host::int(1 / 2);
         Host::str(' ');
         Host::int(7 % 3);
         Host::nl();
 
-        $big = Cast::u64(0x8000000000000000);
+        $big = u64(0x8000000000000000);
         Host::uint($big);
         Host::str(' ');
         Host::int(-9223372036854775807 - 1);
@@ -52,7 +52,7 @@ final class Arith
 
         $x = 10;
         $x -= 5;
-        $y = intdiv($x, 2);
+        $y = $x / 2;
         Host::int($x);
         Host::str(' ');
         Host::int($y);

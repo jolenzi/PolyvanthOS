@@ -38,7 +38,7 @@ final class Statics
         Host::hex(self::MASK * 17);
         Host::nl();
 
-        Host::str(Cast::u8(self::DIGITS[11]) === ord('b') ? 'b' : '?');
+        Host::str(u8(self::DIGITS[11]) === 'b' ? 'b' : '?');
         Host::str(' ');
         Host::str(self::NAMES[1]);
         Host::str(' ');
@@ -89,11 +89,11 @@ final class Statics
     private static function letter(u8 $c): string
     {
         switch ($c) {
-            case ord('a'):
+            case 'a':
                 return 'a';
-            case ord('b'):
+            case 'b':
                 return 'b';
-            case ord('c'):
+            case 'c':
                 return 'c';
         }
         return 'd';
