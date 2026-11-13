@@ -1,6 +1,6 @@
 # Memory access and number conversion
 
-Files: `src/Mem.php`, `src/Cast.php`, `native/mem.h`.
+Files: `src/Mem.php`, `native/mem.h`.
 
 Two small classes that most of the other code leans on.
 
@@ -56,26 +56,27 @@ There is no check that the address really holds that struct. Same as a cast in C
 with a pointer. They also keep the unsafe part in one place: if you search the PHP for `Mem::` you
 find every spot that touches raw memory.
 
-## Cast: choosing a size
+## `u8()`, `i32()` and friends: choosing a size
 
 PHP has one integer type, and C has many. polyc keeps track of the size of every number (see
-[the language](language.md#numbers)), and `Cast` is how you change it on purpose.
+[the language](language.md#numbers)), and these conversions are how you change it on purpose.
+They are built into the compiler, so they are not a class and need no `use` line.
 
-| Method | Result |
+| Call | Result |
 |---|---|
-| `Cast::u8($x)`, `u16`, `u32`, `u64` | The low 8, 16, 32 or 64 bits, as an unsigned number |
-| `Cast::i8($x)`, `i16`, `i32`, `i64` | The low bits, as a signed number |
-| `Cast::bool($x)` | `true` if `$x` is not zero |
+| `u8($x)`, `u16`, `u32`, `u64` | The low 8, 16, 32 or 64 bits, as an unsigned number |
+| `i8($x)`, `i16`, `i32`, `i64` | The low bits, as a signed number |
+| `bool($x)` | `true` if `$x` is not zero |
 
 Two typical uses:
 
 ```php
-$value = Cast::i32($args[$next]);    // Kprintf: a %d argument is 32 bits, sign-extended
-$total = Cast::u64(0);               // a variable that starts out as a u64
+$value = i32($args[$next]);          // Kprintf: a %d argument is 32 bits, sign-extended
+$total = u64(0);                     // a variable that starts out as a u64
 ```
 
 The second one matters because a variable takes its type from the first value stored in it, and a
-plain `0` is an `int`. `Cast::u64(0)` is a `u64` that starts at zero.
+plain `0` is an `int`. `u64(0)` is a `u64` that starts at zero.
 
-A `Cast` on a constant is worked out at build time. On anything else, the compiler writes the C
+A conversion of a constant is worked out at build time. On anything else, the compiler writes the C
 cast. It never changes the value beyond cutting off the bits that don't fit.

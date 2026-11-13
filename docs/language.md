@@ -83,15 +83,16 @@ too. This is a deliberate difference from PHP, and it is the main reason the sou
 differently if you ran them under a real PHP interpreter. Dividing by a constant zero is a compile
 error. `intdiv($a, $b)` still works and means the same thing as `$a / $b`.
 
-**Explicit conversions** use the `Cast` class: `Cast::u8($x)`, `Cast::i32($x)`, `Cast::u64($x)`,
-and `Cast::bool($x)` (true if not zero). PHP's own `(int)` casts are refused, because they would
-not say how many bits.
+**Explicit conversions** are written like function calls named after the type: `u8($x)`,
+`i32($x)`, `u64($x)` and the rest, and `bool($x)` (true if not zero). They are built into the
+compiler, and PHP does not mind the names when it reads the file. PHP's own `(int)` casts are
+refused, because they would not say how many bits.
 
 **Variables have no declaration.** A variable gets the type of the first value stored in it:
 
 ```php
 $a = 3;                 // int, which is i64
-$b = Cast::u64(0);      // u64
+$b = u64(0);           // u64
 $c = ISR::stub(3);      // u64, because that is what stub returns
 ```
 
@@ -113,9 +114,9 @@ strings, no interpolation like `"$x"`, and no heredocs.
   is a literal, such as `const NEWLINE = "\n"`. Where a string is wanted, it is still a string, so
   `Serial::puts('a')` prints the letter.
   Two things to watch for. A *variable* takes the type of the first value stored in it, so
-  `$c = 'a'` makes `$c` a string, not a number; write `$c = Cast::u8('a')` if you want the number.
+  `$c = 'a'` makes `$c` a string, not a number; write `$c = u8('a')` if you want the number.
   And a variadic argument has no type to tell the compiler which you mean, so
-  `Kprintf::printf('%c', 'a')` is an error: write `Cast::u8('a')` to pass the character or
+  `Kprintf::printf('%c', 'a')` is an error: write `u8('a')` to pass the character or
   `Mem::addr('a')` to pass the text.
 - The address of a string, if you need it, is `Mem::addr('text')`. That is how `Kprintf` handles
   `%s` and `(null)`.
@@ -249,8 +250,8 @@ PHP cannot say "run this CPU instruction". Three attributes cover everything the
   real function is written in C in a header under `native/`, with the name the compiler would give
   it (`Arch_X86_64_Port_outb`). The compiler type-checks calls to it from the PHP signature.
 - `#[Header('x86_64.h')]` on a class whose `#[Native]` methods live in that header.
-- `#[Intrinsic]` for the few things the compiler writes itself: `Mem::addr`, `Mem::stack` and
-  everything in `Cast`.
+- `#[Intrinsic]` for the few things the compiler writes itself: `Mem::addr`, `Mem::stack`.
+  (The conversions `u8()`, `u64()` and so on are built into the compiler and need no attribute.)
 
 `#[Export('exception_handler')]` goes the other way: it gives a PHP method a plain C name, so
 assembly (or Limine, in the case of `kmain`) can call it.

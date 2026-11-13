@@ -15,7 +15,7 @@ namespace Polyc;
  *    same way a C cast would. The generated code always writes that cast out.
  *  - Whole-number constants are written out again for each type they are used as.
  *  - Variables are not declared in PHP, so a variable gets the type of the first value stored in
- *    it. Use Cast::u64(0) and friends to pick another type. All variables are declared at the
+ *    it. Use u64(0) and friends to pick another type. All variables are declared at the
  *    top of the C function.
  */
 final class FunctionGen
@@ -374,7 +374,7 @@ final class FunctionGen
     private function word(Ex $e, array $node): string
     {
         if ($e->char !== null) {
-            $this->err('a one-character string is ambiguous as a variadic argument: wrap it in Cast::u8(...) to pass the character, or in Mem::addr(...) to pass the text', $node);
+            $this->err('a one-character string is ambiguous as a variadic argument: wrap it in u8(...) to pass the character, or in Mem::addr(...) to pass the text', $node);
         }
         return match ($e->t->kind) {
             'int' => $e->value !== null ? '(uint64_t)' . $this->literalFor($e->value, $e->big, $this->i64()) : '(uint64_t)' . $e->c,
@@ -581,7 +581,7 @@ final class FunctionGen
                 $this->err("variable \${$target['name']} is used before it gets a value", $n);
             }
             if (!in_array($value->t->kind, ['int', 'bool', 'string', 'class'], true)) {
-                $this->err("cannot create a variable from {$value->t->name()}: use a typed value such as Cast::u64(0) or a class", $n);
+                $this->err("cannot create a variable from {$value->t->name()}: use a typed value such as u64(0) or a class", $n);
             }
             $this->locals[$target['name']] = $value->t;
         }
@@ -644,6 +644,9 @@ final class FunctionGen
     private function call(array $n): Ex
     {
         $args = $n['args'];
+        if ($n['name'] === 'bool' || (isset(Type::INT_NAMES[$n['name']]) && $n['name'] !== 'int')) {
+            return $this->castCall($n['name'], $args, $n);
+        }
         switch ($n['name']) {
             case 'intdiv':
                 if (count($args) !== 2) {
@@ -669,7 +672,7 @@ final class FunctionGen
                 }
                 return new Ex($a->t->length . 'L', $this->i64(), $a->t->length);
         }
-        $this->err("unknown function '{$n['name']}()': only intdiv and count exist, everything else is a class method", $n);
+        $this->err("unknown function '{$n['name']}()': only u8() to i64(), bool(), intdiv() and count() exist, everything else is a class method", $n);
     }
 
     /** @param array<string,mixed> $n */
@@ -716,6 +719,32 @@ final class FunctionGen
         }
         $this->access($method->vis, $cls, "method {$cls->short}::{$method->name}()", $n);
         return new Ex($method->cname . '(' . $this->callArgs($cls, $method, $n['args'], $obj->c, $n) . ')', $method->ret);
+    }
+
+    /**
+     * u8($x), i32($x), u64(0), bool($x) and the rest: cut a whole number down to that type. This is
+     * the only way to say how many bits a number has, and how a variable gets a type other than int.
+     *
+     * @param list<array<string,mixed>> $args
+     * @param array<string,mixed> $n
+     */
+    private function castCall(string $name, array $args, array $n): Ex
+    {
+        if (count($args) !== 1) {
+            $this->err("$name() needs one argument", $n);
+        }
+        $a = $this->expr($args[0]);
+        if ($a->char !== null) {
+            $a = $this->charAsInt($a);
+        }
+        if (!$a->t->isInt()) {
+            $this->err("$name() needs a whole number, not {$a->t->name()}", $n);
+        }
+        if ($name === 'bool') {
+            return new Ex('(' . $this->convert($a, $this->i64()) . ' != 0)', Type::simple('bool'));
+        }
+        $to = Type::named($name);
+        return new Ex($this->convert($a, $to), $to, $a->value !== null ? $this->wrapValue($a->value, $to) : null);
     }
 
     /**
@@ -775,19 +804,6 @@ final class FunctionGen
                 $this->err('Mem::addr() needs an object, an array or a string, not ' . $a->t->name(), $n);
             }
             return new Ex('(uint64_t)(uintptr_t)' . $a->c, $this->u64());
-        }
-        if ($cls->short === 'Cast') {
-            if ($m->name === 'bool') {
-                return new Ex('(' . $this->convert($a, $this->i64()) . ' != 0)', Type::simple('bool'));
-            }
-            if ($a->char !== null) {
-                $a = $this->charAsInt($a);
-            }
-            if (!$a->t->isInt()) {
-                $this->err("Cast::{$m->name}() needs a whole number, not {$a->t->name()}", $n);
-            }
-            $to = Type::named($m->name) ?? $this->err("unknown cast Cast::{$m->name}()", $n);
-            return new Ex($this->convert($a, $to), $to, $a->value !== null ? $this->wrapValue($a->value, $to) : null);
         }
         $this->err("unknown intrinsic $key()", $n);
     }

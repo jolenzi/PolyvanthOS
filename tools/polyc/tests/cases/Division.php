@@ -14,7 +14,7 @@ final class Division
     {
         $a = 7;
         $b = -7;
-        $c = Cast::u64(7);
+        $c = u64(7);
         Host::int($a / 2);
         Host::str(' ');
         Host::int($b / 2); // truncates toward zero, like intdiv
@@ -24,14 +24,14 @@ final class Division
         Host::int(intdiv(9, 2)); // the old spelling still works
         Host::nl();
 
-        $big = Cast::u64(0xFFFFFFFFFFFFFFFF);
+        $big = u64(0xFFFFFFFFFFFFFFFF);
         Host::uint($big / 2); // unsigned: not -1 / 2
         Host::str(' ');
         $x = 100;
         $x /= 7;
         Host::int($x);
         Host::str(' ');
-        $y = Cast::u8(250);
+        $y = u8(250);
         $y /= 100;
         Host::int($y);
         Host::nl();

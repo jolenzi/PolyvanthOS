@@ -7,7 +7,6 @@ declare(strict_types=1);
 namespace Polyvanthos\Drivers;
 
 use Polyvanthos\Arch\X86_64\Port;
-use Polyvanthos\Cast;
 
 final class Serial
 {
@@ -44,7 +43,7 @@ final class Serial
         if ($baudRate === 0 || $baudRate > self::UART_BASE_BAUD) {
             $baudRate = self::DEFAULT_BAUD; // Can't panic here: panic prints through this driver
         }
-        $divisor = Cast::u16(self::UART_BASE_BAUD / $baudRate);
+        $divisor = u16(self::UART_BASE_BAUD / $baudRate);
 
         Port::outb(self::COM1_BASE + self::UART_IER, 0x00); // polled mode: no UART interrupts
 

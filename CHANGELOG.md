@@ -29,3 +29,5 @@ All notable changes to this project are documented here. The format is based on
   `intdiv($a, $b)` is no longer needed. `intdiv` still works.
 - A one-character string such as `'a'` or `"\n"` is the number 97 (or 10) wherever a whole number is
   wanted, so `ord()` is gone: write `$c === '%'` and `case 'x':`.
+- Number conversions are written `u8($x)`, `i32($x)`, `u64(0)` and so on, built into the compiler,
+  instead of `Cast::u8($x)`. The `Cast` class is gone.

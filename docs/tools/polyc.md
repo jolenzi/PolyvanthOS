@@ -121,7 +121,7 @@ For another architecture, write the same function names in another header and na
 - **`tests/cases/`.** Each file with `// expect:` lines is compiled, built with the computer's C
   compiler under `-Wall -Wextra -Werror`, and run. The output must match the `// expect:` lines.
   This tests the generated code for real: the number rules, `switch`, structs, `new`, variadic
-  calls and the rest. The helper classes `Host`, `Mem`, `Cast` and `Counter` live there too. `Host`
+  calls and the rest. The helper classes `Host`, `Mem` and `Counter` live there too. `Host`
   prints through `tests/native/host.h`.
 - **`tests/errors/`.** Each file must be rejected, and the message must contain the text in its
   `// error:` line. These keep the compiler from quietly accepting something it shouldn't.
