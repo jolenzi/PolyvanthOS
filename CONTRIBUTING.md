@@ -15,14 +15,6 @@ licensed under the same terms.
   cannot be accepted. Name the source and its license in the commit message, and add it to
   `NOTICE` if it needs attribution.
 
-## Sign your commits (DCO)
-
-Every commit must include a `Signed-off-by` line, which certifies the
-[Developer Certificate of Origin](https://developercertificate.org/): that you have the right to
-submit the code under the project's license. Add it with:
-
-    git commit -s
-
 ## AI-assisted contributions
 
 AI tools are allowed. If an AI tool wrote a meaningful part of your change, say so in the pull
