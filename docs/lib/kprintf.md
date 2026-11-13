@@ -128,7 +128,7 @@ and its size can never get out of step the way they can with C's `va_arg`.
 
 A `%s` argument is the address of the text, so `printf` reads it a byte at a time with
 `Mem::read8` until it finds a zero. An address of 0 prints `(null)`. The `%c` argument is the
-character code, for example `ord('a')`.
+character code, for example `Cast::u8('a')`.
 
 ### What is checked
 

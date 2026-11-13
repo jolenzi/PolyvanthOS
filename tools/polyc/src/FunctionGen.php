@@ -275,6 +275,9 @@ final class FunctionGen
                     continue;
                 }
                 $e = $this->expr($test);
+                if ($e->char !== null) {
+                    $e = $this->charAsInt($e);
+                }
                 if ($e->value === null) {
                     $this->err("a 'case' must be a constant whole number", $test);
                 }
@@ -350,9 +353,29 @@ final class FunctionGen
         return $a->t->isU64() || $b->t->isU64() ? $this->u64() : $this->i64();
     }
 
+    /** A one-byte string literal where a whole number is wanted becomes that byte: 'a' is 97. */
+    private function charAsInt(Ex $e): Ex
+    {
+        return new Ex($e->char . 'L', $this->i64(), $e->char);
+    }
+
+    /** Apply charAsInt to whichever side is a one-byte literal when the other side is a whole number. */
+    private function charOperands(Ex $l, Ex $r): array
+    {
+        if ($l->t->isInt() && $r->char !== null) {
+            $r = $this->charAsInt($r);
+        } elseif ($r->t->isInt() && $l->char !== null) {
+            $l = $this->charAsInt($l);
+        }
+        return [$l, $r];
+    }
+
     /** One value for a variadic argument list: every argument is passed as a 64-bit word. */
     private function word(Ex $e, array $node): string
     {
+        if ($e->char !== null) {
+            $this->err('a one-character string is ambiguous as a variadic argument: wrap it in Cast::u8(...) to pass the character, or in Mem::addr(...) to pass the text', $node);
+        }
         return match ($e->t->kind) {
             'int' => $e->value !== null ? '(uint64_t)' . $this->literalFor($e->value, $e->big, $this->i64()) : '(uint64_t)' . $e->c,
             'bool' => '(uint64_t)' . $e->c,
@@ -367,6 +390,9 @@ final class FunctionGen
     {
         if ($to->kind === 'mixed') {
             return $this->word($e, $node);
+        }
+        if ($to->isInt() && $e->char !== null) {
+            $e = $this->charAsInt($e);
         }
         $from = $e->t;
         if ($to->isInt() && $from->isInt()) {
@@ -429,7 +455,7 @@ final class FunctionGen
     {
         return match ($n['k']) {
             'int' => new Ex($this->literalFor($n['v'], $n['big'], $n['big'] ? $this->u64() : $this->i64()), $n['big'] ? $this->u64() : $this->i64(), $n['v'], $n['big']),
-            'str' => new Ex($this->gen->cString($n['v']), Type::simple('string')),
+            'str' => new Ex($this->gen->cString($n['v']), Type::simple('string'), char: strlen($n['v']) === 1 ? ord($n['v']) : null),
             'null' => new Ex('NULL', Type::simple('null')),
             'bool' => new Ex($n['v'] ? 'true' : 'false', Type::simple('bool')),
             'var' => $this->variable($n),
@@ -471,8 +497,7 @@ final class FunctionGen
         if ($op === '&&' || $op === '||') {
             return new Ex('(' . $this->cond($n['l']) . " $op " . $this->cond($n['r']) . ')', Type::simple('bool'));
         }
-        $l = $this->expr($n['l']);
-        $r = $this->expr($n['r']);
+        [$l, $r] = $this->charOperands($this->expr($n['l']), $this->expr($n['r']));
         if (in_array($op, ['==', '!=', '===', '!==', '<', '<=', '>', '>='], true)) {
             return $this->compare($op, $l, $r, $n);
         }
@@ -538,8 +563,7 @@ final class FunctionGen
     private function ternary(array $n): Ex
     {
         $cond = $this->cond($n['c']);
-        $a = $this->expr($n['a']);
-        $b = $this->expr($n['b']);
+        [$a, $b] = $this->charOperands($this->expr($n['a']), $this->expr($n['b']));
         $type = $this->unify($a->t, $b->t, $n);
         $conv = fn (Ex $e): string => $type->isInt() ? $this->convert($e, $type) : ($e->t->kind === 'null' ? 'NULL' : $e->c);
         return new Ex("($cond ? {$conv($a)} : {$conv($b)})", $type);
@@ -567,6 +591,9 @@ final class FunctionGen
         if ($n['op'] === '=') {
             $c = "{$dest->c} = " . $this->coerce($value, $dest->t, $n['e']);
         } else {
+            if ($dest->t->isInt() && $value->char !== null) {
+                $value = $this->charAsInt($value);
+            }
             if (!$dest->t->isInt() || !$value->t->isInt()) {
                 $this->err("'{$n['op']}' needs whole numbers", $n);
             }
@@ -618,12 +645,6 @@ final class FunctionGen
     {
         $args = $n['args'];
         switch ($n['name']) {
-            case 'ord':
-                if (count($args) !== 1 || $args[0]['k'] !== 'str' || strlen($args[0]['v']) !== 1) {
-                    $this->err('ord() needs one string literal of exactly one character', $n);
-                }
-                $v = ord($args[0]['v']);
-                return new Ex((string) $v . 'L', $this->i64(), $v);
             case 'intdiv':
                 if (count($args) !== 2) {
                     $this->err('intdiv() needs two arguments', $n);
@@ -648,7 +669,7 @@ final class FunctionGen
                 }
                 return new Ex($a->t->length . 'L', $this->i64(), $a->t->length);
         }
-        $this->err("unknown function '{$n['name']}()': only ord, intdiv and count exist, everything else is a class method", $n);
+        $this->err("unknown function '{$n['name']}()': only intdiv and count exist, everything else is a class method", $n);
     }
 
     /** @param array<string,mixed> $n */
@@ -759,6 +780,9 @@ final class FunctionGen
             if ($m->name === 'bool') {
                 return new Ex('(' . $this->convert($a, $this->i64()) . ' != 0)', Type::simple('bool'));
             }
+            if ($a->char !== null) {
+                $a = $this->charAsInt($a);
+            }
             if (!$a->t->isInt()) {
                 $this->err("Cast::{$m->name}() needs a whole number, not {$a->t->name()}", $n);
             }
@@ -842,7 +866,8 @@ final class FunctionGen
         }
         $const = $this->gen->constant($cls, $n['name'], $n);
         $this->access($const->vis, $cls, "constant {$cls->short}::{$const->name}", $n);
-        return new Ex($const->c, $const->type, $const->value, $const->big);
+        $isChar = $const->expr['k'] === 'str' && strlen($const->expr['v']) === 1;
+        return new Ex($const->c, $const->type, $const->value, $const->big, $isChar ? ord($const->expr['v']) : null);
     }
 
     /** @param array<string,mixed> $n */

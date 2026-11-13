@@ -17,8 +17,8 @@ final class Kprintf
     // All kprintf output goes through here, so a framebuffer or log buffer can be added later.
     private static function emit(u8 $c): void
     {
-        if ($c === ord("\n")) {
-            Serial::putc(ord("\r")); // serial terminals need CR+LF
+        if ($c === "\n") {
+            Serial::putc("\r"); // serial terminals need CR+LF
         }
         Serial::putc($c);
     }
@@ -52,7 +52,7 @@ final class Kprintf
     {
         $magnitude = Cast::u64($value);
         if ($value < 0) {
-            self::emit(ord('-'));
+            self::emit('-');
             // Negate in unsigned arithmetic: well-defined even for the smallest number.
             $magnitude = 0 - $magnitude;
         }
@@ -71,7 +71,7 @@ final class Kprintf
         for ($p = 0; $fmt[$p] !== 0; ++$p) {
             $c = $fmt[$p];
 
-            if ($c !== ord('%')) {
+            if ($c !== '%') {
                 // Ordinary character
                 self::emit($c);
                 continue;
@@ -85,7 +85,7 @@ final class Kprintf
 
             // Count the 'l' characters
             $longCount = 0;
-            while ($fmt[$p] === ord('l')) {
+            while ($fmt[$p] === 'l') {
                 ++$longCount;
                 ++$p;
             }
@@ -96,35 +96,35 @@ final class Kprintf
 
             $conversion = $fmt[$p];
             switch ($conversion) {
-                case ord('c'):
+                case 'c':
                     self::emit(Cast::u8($args[$next++]));
                     break;
-                case ord('s'):
+                case 's':
                     self::putString($args[$next++]);
                     break;
-                case ord('d'):
+                case 'd':
                     // Without an l the argument is an int (32 bits), so sign-extend it.
                     self::putInt($longCount === 0 ? Cast::i32($args[$next]) : Cast::i64($args[$next]));
                     $next++;
                     break;
-                case ord('u'):
+                case 'u':
                     self::putUint($longCount === 0 ? Cast::u32($args[$next]) : $args[$next], 10);
                     $next++;
                     break;
-                case ord('x'):
+                case 'x':
                     self::putUint($longCount === 0 ? Cast::u32($args[$next]) : $args[$next], 16);
                     $next++;
                     break;
-                case ord('p'):
-                    self::emit(ord('0'));
-                    self::emit(ord('x'));
+                case 'p':
+                    self::emit('0');
+                    self::emit('x');
                     self::putUint($args[$next++], 16);
                     break;
-                case ord('%'):
-                    self::emit(ord('%'));
+                case '%':
+                    self::emit('%');
                     break;
                 default:
-                    self::emit(ord('%'));
+                    self::emit('%');
                     self::emit($conversion);
                     break;
             }

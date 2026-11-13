@@ -107,8 +107,16 @@ strings, no interpolation like `"$x"`, and no heredocs.
 
 - `$s[$i]` is the byte at that position, as a `u8`. A string is compared by looking at its bytes,
   as `Serial::puts` does. Two strings can't be compared with `===`.
-- `ord('a')` is the number 97, worked out at build time. It works only on a string literal of one
-  character, and it is how you write a character in a `switch` or a comparison.
+- **A one-character string is also a character.** Where a whole number is wanted, `'a'` is the
+  number 97, worked out at build time. So you write `$c === '%'`, `case 'x':`, `$digit - '0'` and
+  `Serial::putc("\n")`, with no `ord()`. This works for a literal, or a class constant whose value
+  is a literal, such as `const NEWLINE = "\n"`. Where a string is wanted, it is still a string, so
+  `Serial::puts('a')` prints the letter.
+  Two things to watch for. A *variable* takes the type of the first value stored in it, so
+  `$c = 'a'` makes `$c` a string, not a number; write `$c = Cast::u8('a')` if you want the number.
+  And a variadic argument has no type to tell the compiler which you mean, so
+  `Kprintf::printf('%c', 'a')` is an error: write `Cast::u8('a')` to pass the character or
+  `Mem::addr('a')` to pass the text.
 - The address of a string, if you need it, is `Mem::addr('text')`. That is how `Kprintf` handles
   `%s` and `(null)`.
 
@@ -210,8 +218,8 @@ Scratch space in a function, such as the digits buffer in `Kprintf::putUint`, co
 `if`, `elseif`, `else`, `while`, `do ... while`, `for` (with commas in the first and last part),
 `switch`, `break`, `continue`, `return`, blocks, and expressions.
 
-- `switch` is on whole numbers, and each `case` is a constant (a number, `ord('x')` or a class
-  constant). It falls through like C and PHP.
+- `switch` is on whole numbers, and each `case` is a constant (a number, a character such as
+  `'x'`, or a class constant). It falls through like C and PHP.
 - `continue` has to be directly inside a loop. In PHP, `continue` inside a `switch` quietly acts
   like `break`, so polyc doesn't allow it and nobody is surprised.
 - `break` and `continue` take no level.
@@ -221,8 +229,8 @@ Not available: `foreach`, `try`/`catch`/`throw`, `goto`, `echo`, `unset`, `globa
 
 ## Calling functions
 
-Only methods can be called, as `Class::method()` or `$object->method()`, plus three built-in
-functions: `ord`, `intdiv` and `count`.
+Only methods can be called, as `Class::method()` or `$object->method()`, plus two built-in
+functions: `intdiv` and `count`.
 
 - Arguments are stored into the parameter types, so a number is cut down to fit.
 - Parameters can have default values that are constants. Only `int`, `bool` and `string` parameters
