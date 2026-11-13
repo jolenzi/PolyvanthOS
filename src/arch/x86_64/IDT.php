@@ -58,8 +58,8 @@ final class IDT
     /** Load the IDT so CPU exceptions (divide by zero, page fault, ...) reach our handler. */
     public static function init(): void
     {
-        for ($i = 0; $i < 32; ++$i) {
-            self::setGate($i, ISR::stub($i));
+        foreach (range(0, 31) as $vector) {
+            self::setGate($vector, ISR::stub($vector));
         }
 
         // A double fault happens when delivering an exception fails, often because the stack

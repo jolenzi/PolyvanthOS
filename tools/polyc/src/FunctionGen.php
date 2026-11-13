@@ -31,6 +31,8 @@ final class FunctionGen
     /** @var list<string> */
     private array $control = [];
     private int $indent = 1;
+    /** Numbers the hidden counters and temporaries that foreach loops use. */
+    private int $loops = 0;
 
     public function __construct(
         private readonly CodeGen $gen,
@@ -196,6 +198,9 @@ final class FunctionGen
             case 'for':
                 $this->forStmt($s);
                 break;
+            case 'foreach':
+                $this->foreachStmt($s);
+                break;
             case 'switch':
                 $this->switchStmt($s);
                 break;
@@ -257,6 +262,108 @@ final class FunctionGen
         $this->emit("for ($init; $cond; $step) {");
         $this->loopBody($s['body']);
         $this->emit('}');
+    }
+
+    /**
+     * foreach over an array or a string is a for loop over a hidden counter, written as PHP and then
+     * compiled like any other for loop, so break, continue and the type rules need no special cases.
+     * A string is walked up to its zero byte. The subject is read again on every round, so it must
+     * be something that reading cannot change.
+     *
+     * @param array<string,mixed> $s
+     */
+    private function foreachStmt(array $s): void
+    {
+        $subject = $s['subject'];
+        if ($subject['k'] === 'call' && $subject['name'] === 'range') {
+            $this->rangeLoop($s);
+            return;
+        }
+        if (!in_array($subject['k'], ['var', 'prop', 'sprop', 'cconst', 'str'], true)) {
+            $this->err('foreach needs an array or a string held in a variable, a property or a constant', $subject);
+        }
+        $type = $this->expr($subject)->t;
+        if ($type->kind !== 'array' && $type->kind !== 'string') {
+            $this->err('foreach needs an array or a string, not ' . $type->name(), $subject);
+        }
+
+        $line = $s['line'];
+        $var = fn (string $name): array => ['k' => 'var', 'name' => $name, 'line' => $line];
+        $zero = ['k' => 'int', 'v' => 0, 'big' => false, 'line' => $line];
+        $counter = '__each' . $this->loops++;
+        $item = ['k' => 'idx', 'base' => $subject, 'index' => $var($counter), 'line' => $line];
+        $set = fn (string $name, array $value): array => [
+            'k' => 'expr', 'line' => $line,
+            'e' => ['k' => 'assign', 'op' => '=', 't' => $var($name), 'e' => $value, 'line' => $line],
+        ];
+
+        $body = [];
+        if ($s['key'] !== null) {
+            $body[] = $set($s['key'], $var($counter));
+        }
+        $body[] = $set($s['value'], $item);
+        array_push($body, ...$s['body']);
+
+        $cond = $type->kind === 'array'
+            ? ['k' => 'bin', 'op' => '<', 'l' => $var($counter), 'r' => ['k' => 'call', 'name' => 'count', 'args' => [$subject], 'line' => $line], 'line' => $line]
+            : ['k' => 'bin', 'op' => '!==', 'l' => $item, 'r' => $zero, 'line' => $line];
+        $this->forStmt([
+            'k' => 'for',
+            'init' => [['k' => 'assign', 'op' => '=', 't' => $var($counter), 'e' => $zero, 'line' => $line]],
+            'cond' => [$cond],
+            'step' => [['k' => 'incdec', 'op' => '++', 'prefix' => false, 't' => $var($counter), 'line' => $line]],
+            'body' => $body,
+            'line' => $line,
+        ]);
+    }
+
+    /**
+     * foreach (range($first, $last) as $i): both ends are included, and as in PHP it counts down when
+     * $first is larger than $last. The ends are worked out once, and the loop runs a counted number
+     * of times, so it is also safe for unsigned numbers.
+     *
+     * @param array<string,mixed> $s
+     */
+    private function rangeLoop(array $s): void
+    {
+        $call = $s['subject'];
+        if (count($call['args']) !== 2) {
+            $this->err('range() needs two arguments here: foreach (range($first, $last) as $i)', $call);
+        }
+        [$a, $b] = array_map(function (array $arg): Ex {
+            $e = $this->expr($arg);
+            $e = $e->char !== null ? $this->charAsInt($e) : $e;
+            return $e->t->isInt() ? $e : $this->err('range() needs whole numbers, not ' . $e->t->name(), $arg);
+        }, $call['args']);
+
+        $type = $this->common($a, $b);
+        $c = $type->c(fn ($class) => $class);
+        $n = $this->loops++;
+        [$first, $last, $span, $step] = ["range{$n}_first", "range{$n}_last", "range{$n}_span", "range{$n}_step"];
+        $this->emit('{');
+        $this->indent++;
+        $this->emit("$c $first = " . $this->convert($a, $type) . ';');
+        $this->emit("$c $last = " . $this->convert($b, $type) . ';');
+        $this->emit("uint64_t $span = $first <= $last ? (uint64_t)$last - (uint64_t)$first : (uint64_t)$first - (uint64_t)$last;");
+        $this->emit("for (uint64_t $step = 0; $step <= $span; $step++) {");
+        $this->indent++;
+        if ($s['key'] !== null) {
+            $this->emit($this->assignLocal($s['key'], new Ex("(int64_t)$step", $this->i64()), $s));
+        }
+        $this->emit($this->assignLocal($s['value'], new Ex("($c)($first <= $last ? (uint64_t)$first + $step : (uint64_t)$first - $step)", $type), $s));
+        $this->indent--;
+        $this->loopBody($s['body']);
+        $this->emit('}');
+        $this->indent--;
+        $this->emit('}');
+    }
+
+    /** C text for storing $value in the variable $name, which the first store creates. */
+    private function assignLocal(string $name, Ex $value, array $node): string
+    {
+        $this->locals[$name] ??= $value->t;
+        $dest = $this->expr(['k' => 'var', 'name' => $name, 'line' => $node['line']]);
+        return $dest->c . ' = ' . $this->coerce($value, $dest->t, $node) . ';';
     }
 
     /** @param array<string,mixed> $s */
@@ -662,6 +769,8 @@ final class FunctionGen
                 }
                 $type = $this->common($a, $b);
                 return new Ex('(' . $this->convert($a, $type) . ' / ' . $this->convert($b, $type) . ')', $type);
+            case 'range':
+                $this->err('range() can only be the list of a foreach: foreach (range($first, $last) as $i)', $n);
             case 'count':
                 $a = count($args) === 1 ? $this->expr($args[0]) : $this->err('count() needs one argument', $n);
                 if ($a->t->kind !== 'array') {
@@ -672,7 +781,7 @@ final class FunctionGen
                 }
                 return new Ex($a->t->length . 'L', $this->i64(), $a->t->length);
         }
-        $this->err("unknown function '{$n['name']}()': only u8() to i64(), bool(), intdiv() and count() exist, everything else is a class method", $n);
+        $this->err("unknown function '{$n['name']}()': only u8() to i64(), bool(), intdiv(), count() and range() exist, everything else is a class method", $n);
     }
 
     /** @param array<string,mixed> $n */
