@@ -762,7 +762,7 @@ final class Parser
         }
         if ($this->isOp('(')) {
             if ($token->is([T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED])) {
-                $this->fail('only the built-in functions ord, intdiv and count can be called');
+                $this->fail('only the built-in functions intdiv and count can be called');
             }
             return ['k' => 'call', 'name' => $lower, 'args' => $this->parseArgs(), 'line' => $line];
         }

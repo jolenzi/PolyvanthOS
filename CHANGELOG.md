@@ -27,3 +27,5 @@ All notable changes to this project are documented here. The format is based on
 
 - In the kernel's PHP subset, `/` and `/=` now divide whole numbers (rounding toward zero), so
   `intdiv($a, $b)` is no longer needed. `intdiv` still works.
+- A one-character string such as `'a'` or `"\n"` is the number 97 (or 10) wherever a whole number is
+  wanted, so `ord()` is gone: write `$c === '%'` and `case 'x':`.

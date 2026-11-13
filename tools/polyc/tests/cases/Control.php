@@ -21,7 +21,7 @@ final class Control
             case 2:
             case 3:
                 return 'small';
-            case ord('A'):
+            case 'A':
                 return 'letter';
             default:
                 return 'other';

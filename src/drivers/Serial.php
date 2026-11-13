@@ -72,8 +72,8 @@ final class Serial
     public static function puts(string $s): void
     {
         for ($i = 0; $s[$i] !== 0; $i++) {
-            if ($s[$i] === ord("\n")) {
-                self::putc(ord("\r"));
+            if ($s[$i] === "\n") {
+                self::putc("\r");
             }
             self::putc($s[$i]);
         }
