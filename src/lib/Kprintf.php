@@ -6,7 +6,6 @@ declare(strict_types=1);
 
 namespace Polyvanthos\Lib;
 
-use Polyvanthos\Cast;
 use Polyvanthos\Drivers\Serial;
 use Polyvanthos\Mem;
 
@@ -50,7 +49,7 @@ final class Kprintf
     /** Print $value in base 10 with a leading '-' if negative. */
     public static function putInt(int $value): void
     {
-        $magnitude = Cast::u64($value);
+        $magnitude = u64($value);
         if ($value < 0) {
             self::emit('-');
             // Negate in unsigned arithmetic: well-defined even for the smallest number.
@@ -97,22 +96,22 @@ final class Kprintf
             $conversion = $fmt[$p];
             switch ($conversion) {
                 case 'c':
-                    self::emit(Cast::u8($args[$next++]));
+                    self::emit(u8($args[$next++]));
                     break;
                 case 's':
                     self::putString($args[$next++]);
                     break;
                 case 'd':
                     // Without an l the argument is an int (32 bits), so sign-extend it.
-                    self::putInt($longCount === 0 ? Cast::i32($args[$next]) : Cast::i64($args[$next]));
+                    self::putInt($longCount === 0 ? i32($args[$next]) : i64($args[$next]));
                     $next++;
                     break;
                 case 'u':
-                    self::putUint($longCount === 0 ? Cast::u32($args[$next]) : $args[$next], 10);
+                    self::putUint($longCount === 0 ? u32($args[$next]) : $args[$next], 10);
                     $next++;
                     break;
                 case 'x':
-                    self::putUint($longCount === 0 ? Cast::u32($args[$next]) : $args[$next], 16);
+                    self::putUint($longCount === 0 ? u32($args[$next]) : $args[$next], 16);
                     $next++;
                     break;
                 case 'p':

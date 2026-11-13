@@ -8,7 +8,6 @@ namespace Polyvanthos\Mm;
 
 use Polyvanthos\Boot\Limine;
 use Polyvanthos\Boot\MemMapResponse;
-use Polyvanthos\Cast;
 use Polyvanthos\Lib\Kprintf;
 use Polyvanthos\Lib\Panic;
 use Polyvanthos\Mem;
@@ -41,7 +40,7 @@ final class PMM
     {
         // The bitmap covers every page up to the end of the highest usable region. Reserved
         // regions far above (framebuffer, device memory) are ignored so it stays small.
-        $highestEnd = Cast::u64(0);
+        $highestEnd = u64(0);
         for ($i = 0; $i < $memmap->entryCount; $i++) {
             $entry = $memmap->entry($i);
             if ($entry->type === Limine::MEMMAP_USABLE) {
@@ -59,7 +58,7 @@ final class PMM
 
         // Put the bitmap in the first usable region that is big enough. That address is
         // physical, so add the HHDM offset before touching it.
-        $bitmapPhys = Cast::u64(0);
+        $bitmapPhys = u64(0);
         $found = false;
         for ($i = 0; $i < $memmap->entryCount; $i++) {
             $entry = $memmap->entry($i);
@@ -168,9 +167,9 @@ final class PMM
             return 0;
         }
 
-        $runStart = Cast::u64(0);
-        $runLength = Cast::u64(0);
-        for ($page = Cast::u64(0); $page < self::$totalPages; $page++) {
+        $runStart = u64(0);
+        $runLength = u64(0);
+        for ($page = u64(0); $page < self::$totalPages; $page++) {
             if (self::isUsed($page)) {
                 $runLength = 0;
                 continue;

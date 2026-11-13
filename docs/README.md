@@ -20,7 +20,7 @@ The folders match the source tree, so the page for `src/lib/Kprintf.php` is
 | Source | Page | What it covers |
 |---|---|---|
 | `limine.conf`, `src/boot/`, `src/Kernel.php` | [boot/limine.md](boot/limine.md) | How the kernel gets loaded, what Limine hands over, the request markers, and the base revision check |
-| `src/Mem.php`, `src/Cast.php`, `native/mem.h` | [mem.md](mem.md) | Reading and writing memory at an address, and converting between number sizes |
+| `src/Mem.php`, `native/mem.h` | [mem.md](mem.md) | Reading and writing memory at an address, and converting between number sizes |
 | `src/arch/x86_64/linker.ld` | [arch/x86_64/linker.md](arch/x86_64/linker.md) | Where the kernel sits in memory and how the sections are laid out |
 | `src/arch/x86_64/Port.php`, `CPU.php`, `native/x86_64.h` | [arch/x86_64/cpu.md](arch/x86_64/cpu.md) | Port I/O and halting the CPU |
 | `src/arch/x86_64/GDT.php`, `TSS.php` | [arch/x86_64/gdt.md](arch/x86_64/gdt.md) | The segment table and why we load our own |

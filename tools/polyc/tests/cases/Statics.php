@@ -38,7 +38,7 @@ final class Statics
         Host::hex(self::MASK * 17);
         Host::nl();
 
-        Host::str(Cast::u8(self::DIGITS[11]) === 'b' ? 'b' : '?');
+        Host::str(u8(self::DIGITS[11]) === 'b' ? 'b' : '?');
         Host::str(' ');
         Host::str(self::NAMES[1]);
         Host::str(' ');

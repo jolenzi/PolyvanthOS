@@ -6,7 +6,6 @@ declare(strict_types=1);
 
 namespace Polyvanthos\Mm;
 
-use Polyvanthos\Cast;
 use Polyvanthos\Lib\Kprintf;
 use Polyvanthos\Lib\Panic;
 use Polyvanthos\Mem;
@@ -124,7 +123,7 @@ final class Heap
     public static function freeBytes(): u64
     {
         // After everything is freed and merged this is back to its starting value.
-        $total = Cast::u64(0);
+        $total = u64(0);
         for ($b = self::$first; $b !== null; $b = $b->next) {
             if ($b->isFree !== 0) {
                 $total += $b->size;

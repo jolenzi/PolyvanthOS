@@ -64,7 +64,7 @@ numbers is undefined behaviour in C, so the compiler is allowed to do anything.
 The fix is to do the negation as unsigned numbers, where wrapping around is defined:
 
 ```php
-$magnitude = Cast::u64($value);
+$magnitude = u64($value);
 if ($value < 0) {
     $magnitude = 0 - $magnitude;
 }
@@ -122,13 +122,13 @@ matters:
 %lld -> the same as %ld                        %llu      -> the same as %lu
 ```
 
-In the code, `%d` without an `l` is `Cast::i32($args[$next])`, which cuts the word to 32 bits and
-reads it as signed. With an `l` it is `Cast::i64`. Going through a word like this means a number
+In the code, `%d` without an `l` is `i32($args[$next])`, which cuts the word to 32 bits and
+reads it as signed. With an `l` it is `i64`. Going through a word like this means a number
 and its size can never get out of step the way they can with C's `va_arg`.
 
 A `%s` argument is the address of the text, so `printf` reads it a byte at a time with
 `Mem::read8` until it finds a zero. An address of 0 prints `(null)`. The `%c` argument is the
-character code, for example `Cast::u8('a')`.
+character code, for example `u8('a')`.
 
 ### What is checked
 

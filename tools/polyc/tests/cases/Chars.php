@@ -33,7 +33,7 @@ final class Chars
     public static function main(): void
     {
         // A one-character string becomes its byte where a number is wanted.
-        $c = Cast::u8(97);
+        $c = u8(97);
         Host::int(self::code('a'));
         Host::str(' ');
         Host::int(self::code("\n"));
@@ -58,12 +58,12 @@ final class Chars
         Host::int(self::kind('z'));
         Host::str(' ');
 
-        // Cast accepts one, and compound assignment does too.
-        $d = Cast::u8('0');
+        // u8() accepts one, and compound assignment does too.
+        $d = u8('0');
         $d += 3;
         Host::int($d - '0');
         Host::str(' ');
-        $x = Cast::u8('x');
+        $x = u8('x');
         Host::int($x);
         Host::nl();
     }

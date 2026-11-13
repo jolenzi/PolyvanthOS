@@ -608,7 +608,7 @@ final class Parser
         $token = $this->peek() ?? $this->fail('unexpected end of file');
         $line = $token->line;
         if ($token->is([T_INT_CAST, T_BOOL_CAST, T_STRING_CAST, T_DOUBLE_CAST, T_ARRAY_CAST, T_OBJECT_CAST])) {
-            $this->fail("casts are not supported: use Cast::u8(), Cast::u64() and so on");
+            $this->fail("casts are not supported: use u8(), u64() and so on");
         }
         if (in_array($token->text, ['!', '-', '+', '~'], true) && !$token->is(T_VARIABLE)) {
             $this->next();
@@ -762,7 +762,7 @@ final class Parser
         }
         if ($this->isOp('(')) {
             if ($token->is([T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED])) {
-                $this->fail('only the built-in functions intdiv and count can be called');
+                $this->fail('only the built-in functions u8() to i64(), bool(), intdiv() and count() can be called');
             }
             return ['k' => 'call', 'name' => $lower, 'args' => $this->parseArgs(), 'line' => $line];
         }

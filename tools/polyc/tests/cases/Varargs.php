@@ -18,7 +18,7 @@ final class Varargs
         Host::str($label);
         for ($i = 0; $i < count($args); $i++) {
             Host::str(' ');
-            Host::int(Cast::i32($args[$i]));
+            Host::int(i32($args[$i]));
         }
         Host::nl();
     }
