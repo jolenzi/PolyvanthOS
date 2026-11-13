@@ -320,7 +320,9 @@ final class FunctionGen
     /**
      * foreach (range($first, $last) as $i): both ends are included, and as in PHP it counts down when
      * $first is larger than $last. The ends are worked out once, and the loop runs a counted number
-     * of times, so it is also safe for unsigned numbers.
+     * of times, so the counter cannot wrap around the end value. The one extreme case is a range over
+     * the whole of u64 (0 to UINT64_MAX): it needs 2^64 steps, so it never finishes on its own, and
+     * break or return still leave it.
      *
      * @param array<string,mixed> $s
      */
@@ -463,6 +465,9 @@ final class FunctionGen
     /** A one-byte string literal where a whole number is wanted becomes that byte: 'a' is 97. */
     private function charAsInt(Ex $e): Ex
     {
+        if ($e->charC !== null) {
+            return new Ex($e->charC, $this->i64());
+        }
         return new Ex($e->char . 'L', $this->i64(), $e->char);
     }
 
@@ -659,6 +664,7 @@ final class FunctionGen
             return new Ex('(!' . $this->cond($n['e']) . ')', Type::simple('bool'));
         }
         $e = $this->expr($n['e']);
+        $e = $e->char !== null ? $this->charAsInt($e) : $e;
         if (!$e->t->isInt()) {
             $this->err("'{$n['op']}' needs a whole number, not {$e->t->name()}", $n);
         }
@@ -680,6 +686,10 @@ final class FunctionGen
         [$a, $b] = $this->charOperands($this->expr($n['a']), $this->expr($n['b']));
         $type = $this->unify($a->t, $b->t, $n);
         $conv = fn (Ex $e): string => $type->isInt() ? $this->convert($e, $type) : ($e->t->kind === 'null' ? 'NULL' : $e->c);
+        if ($a->char !== null && $b->char !== null) {
+            $byte = fn (Ex $e): string => $e->charC ?? $e->char . 'L';
+            return new Ex("($cond ? {$a->c} : {$b->c})", $type, null, false, $a->char, "($cond ? {$byte($a)} : {$byte($b)})");
+        }
         return new Ex("($cond ? {$conv($a)} : {$conv($b)})", $type);
     }
 
@@ -766,16 +776,7 @@ final class FunctionGen
                 if (count($args) !== 2) {
                     $this->err('intdiv() needs two arguments', $n);
                 }
-                $a = $this->expr($args[0]);
-                $b = $this->expr($args[1]);
-                if (!$a->t->isInt() || !$b->t->isInt()) {
-                    $this->err('intdiv() needs whole numbers', $n);
-                }
-                if ($b->value === 0) {
-                    $this->err('division by zero', $n);
-                }
-                $type = $this->common($a, $b);
-                return new Ex('(' . $this->convert($a, $type) . ' / ' . $this->convert($b, $type) . ')', $type);
+                return $this->binary(['k' => 'bin', 'op' => '/', 'l' => $args[0], 'r' => $args[1], 'line' => $n['line'] ?? 0]);
             case 'range':
                 $this->err('range() can only be the list of a foreach: foreach (range($first, $last) as $i)', $n);
             case 'count':
@@ -1054,8 +1055,9 @@ final class FunctionGen
         }
         $const = $this->gen->constant($cls, $n['name'], $n);
         $this->access($const->vis, $cls, "constant {$cls->short}::{$const->name}", $n);
-        $isChar = $const->expr['k'] === 'str' && strlen($const->expr['v']) === 1;
-        return new Ex($const->c, $const->type, $const->value, $const->big, $isChar ? ord($const->expr['v']) : null);
+        $text = $const->type->kind === 'string' ? $this->program->foldString($const->expr, $cls) : null;
+        $isChar = $text !== null && strlen($text) === 1;
+        return new Ex($const->c, $const->type, $const->value, $const->big, $isChar ? ord($text) : null);
     }
 
     /** @param array<string,mixed> $n */

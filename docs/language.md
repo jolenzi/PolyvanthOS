@@ -81,7 +81,10 @@ above.
 `7 / 2` is `3`: the result is rounded toward zero, the same as C, and `-7 / 2` is `-3`. `/=` works
 too. This is a deliberate difference from PHP, and it is the main reason the sources would behave
 differently if you ran them under a real PHP interpreter. Dividing by a constant zero is a compile
-error. `intdiv($a, $b)` still works and means the same thing as `$a / $b`.
+error. Dividing by a variable that is zero at run time (or `i64` minimum by `-1`) is not checked: the
+CPU raises a divide error (#DE), which the kernel reports as an exception. `/` and `%` also work in
+constant expressions such as array sizes and case labels. `intdiv($a, $b)` still works and means
+the same thing as `$a / $b`.
 
 **Explicit conversions** are written like function calls named after the type: `u8($x)`,
 `i32($x)`, `u64($x)` and the rest, and `bool($x)` (true if not zero). They are built into the
