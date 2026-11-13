@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // expect: 97 10 true 7 97 b
 // expect: 1 2 2 3 3 120
+// expect: 121 -97 -98 61 98 y
+// expect: 9 4 2 5
 
 declare(strict_types=1);
 
@@ -11,6 +13,10 @@ namespace Test;
 final class Chars
 {
     private const NEWLINE = "\n";
+    private const YES = 'y';
+    private const ALIAS = self::YES;
+    private const SIZE = 18 / 2;
+    private const REST = 19 % 5;
 
     private static function code(u8 $c): u8
     {
@@ -65,6 +71,31 @@ final class Chars
         Host::str(' ');
         $x = u8('x');
         Host::int($x);
+        Host::nl();
+
+        // A choice between two characters is a number where a number is wanted, and a string elsewhere.
+        $ok = true;
+        Host::int(u8($ok ? 'y' : 'n'));
+        Host::str(' ');
+        Host::int(-'a');
+        Host::str(' ');
+        Host::int(~'a');
+        Host::str(' ');
+        Host::int(intdiv('z', 2));
+        Host::str(' ');
+        Host::int(self::ALIAS - 23); // a constant that names another character is a character too
+        Host::str(' ');
+        Host::str($ok ? 'y' : 'n');
+        Host::nl();
+
+        // / and % work in constant expressions.
+        Host::int(self::SIZE);
+        Host::str(' ');
+        Host::int(self::REST);
+        Host::str(' ');
+        Host::int(11 % 3);
+        Host::str(' ');
+        Host::int(17 / 3);
         Host::nl();
     }
 }
