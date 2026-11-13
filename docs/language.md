@@ -16,7 +16,7 @@ That has a few consequences:
   strings you can join) does not exist here. The compiler refuses it with a message instead of
   guessing.
 - The rules that differ from PHP are on this page. The main ones are that numbers have a fixed
-  size, `/` is not allowed (use `intdiv`), and a variable gets its type from the first value
+  size, `/` divides whole numbers (so `7 / 2` is `3`), and a variable gets its type from the first value
   stored in it.
 - Because the code is PHP-shaped, it reads like PHP: classes, static methods, constants, typed
   properties, `null`, `new`.
@@ -73,13 +73,15 @@ Everything is a whole number, and all the arithmetic is done in 64 bits:
 - A literal is written again for each type it is used as. `0x8000000000000000` is a valid `u64`.
   Decimal literals must fit in a signed 64-bit number; write bigger ones in hex.
 
-Operators: `+ - * % & | ^ ~ << >>`, the comparisons `== != === !== < <= > >=` (`===` and `==`
+Operators: `+ - * / % & | ^ ~ << >>`, the comparisons `== != === !== < <= > >=` (`===` and `==`
 mean the same here), `&& || !`, `?:` with three parts, and the assignment forms of the operators
 above.
 
-**There is no `/`.** In PHP, `7 / 2` is `3.5`, a float, and the kernel has none. polyc refuses `/` and
-`/=`. Use `intdiv($a, $b)`, which is the same as PHP's `intdiv` and divides whole numbers
-(rounding toward zero).
+**`/` divides whole numbers.** In PHP, `7 / 2` is `3.5`, a float. The kernel has no floats, so here
+`7 / 2` is `3`: the result is rounded toward zero, the same as C, and `-7 / 2` is `-3`. `/=` works
+too. This is a deliberate difference from PHP, and it is the main reason the sources would behave
+differently if you ran them under a real PHP interpreter. Dividing by a constant zero is a compile
+error. `intdiv($a, $b)` still works and means the same thing as `$a / $b`.
 
 **Explicit conversions** use the `Cast` class: `Cast::u8($x)`, `Cast::i32($x)`, `Cast::u64($x)`,
 and `Cast::bool($x)` (true if not zero). PHP's own `(int)` casts are refused, because they would
