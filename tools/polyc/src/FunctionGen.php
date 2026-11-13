@@ -476,11 +476,11 @@ final class FunctionGen
         if (in_array($op, ['==', '!=', '===', '!==', '<', '<=', '>', '>='], true)) {
             return $this->compare($op, $l, $r, $n);
         }
-        if ($op === '/') {
-            $this->err('use intdiv($a, $b) for division: PHP\'s / gives a float', $n);
-        }
         if (!$l->t->isInt() || !$r->t->isInt()) {
             $this->err("'$op' needs whole numbers, not {$l->t->name()} and {$r->t->name()}", $n);
+        }
+        if (($op === '/' || $op === '%') && $r->value === 0) {
+            $this->err('division by zero', $n);
         }
         if ($op === '<<' || $op === '>>') {
             $type = $l->t->isU64() ? $this->u64() : $this->i64();
@@ -570,8 +570,8 @@ final class FunctionGen
             if (!$dest->t->isInt() || !$value->t->isInt()) {
                 $this->err("'{$n['op']}' needs whole numbers", $n);
             }
-            if ($n['op'] === '/=') {
-                $this->err('use $x = intdiv($x, $y): PHP\'s / gives a float', $n);
+            if (($n['op'] === '/=' || $n['op'] === '%=') && $value->value === 0) {
+                $this->err('division by zero', $n);
             }
             $isShift = $n['op'] === '<<=' || $n['op'] === '>>=';
             $c = "{$dest->c} {$n['op']} " . $this->convert($value, $isShift ? $this->i64() : $this->common($dest, $value));

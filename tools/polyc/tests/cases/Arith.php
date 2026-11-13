@@ -39,7 +39,7 @@ final class Arith
 
         Host::int((5 & 3) | (4 ^ 4));
         Host::str(' ');
-        Host::int(intdiv(1, 2));
+        Host::int(1 / 2);
         Host::str(' ');
         Host::int(7 % 3);
         Host::nl();
@@ -52,7 +52,7 @@ final class Arith
 
         $x = 10;
         $x -= 5;
-        $y = intdiv($x, 2);
+        $y = $x / 2;
         Host::int($x);
         Host::str(' ');
         Host::int($y);

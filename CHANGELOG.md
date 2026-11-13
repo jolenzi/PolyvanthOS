@@ -22,3 +22,8 @@ All notable changes to this project are documented here. The format is based on
 - Physical page allocator (bitmap), with a boot-time selftest.
 - Kernel heap (`kmalloc` and `kfree`, first fit with splitting and merging), with a boot-time
   selftest.
+
+### Changed
+
+- In the kernel's PHP subset, `/` and `/=` now divide whole numbers (rounding toward zero), so
+  `intdiv($a, $b)` is no longer needed. `intdiv` still works.

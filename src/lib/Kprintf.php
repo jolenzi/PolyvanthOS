@@ -38,7 +38,7 @@ final class Kprintf
             $remainder = $value % $base;
             Mem::write8($buffer + $counter, self::DIGITS[$remainder]);
             $counter++;
-            $value = intdiv($value, $base);
+            $value /= $base;
         } while ($value !== 0);
 
         // Print in reverse
