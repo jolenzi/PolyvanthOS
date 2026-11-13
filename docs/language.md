@@ -103,8 +103,8 @@ A variable that is read before anything is stored in it is an error. A name can'
 ## Strings
 
 A `string` is a pointer to bytes that end in a zero, and it never changes. Literals are what you
-get: `'text'` and `"text\n"` (with the usual PHP escapes in double quotes). There is no `.` to join
-strings, no interpolation like `"$x"`, and no heredocs.
+get: `'text'` and `"text\n"` (with the usual PHP escapes in double quotes). Strings can be joined
+with `.`, but only at build time (see below). There is no interpolation like `"$x"` and no heredocs.
 
 - `$s[$i]` is the byte at that position, as a `u8`. A string is compared by looking at its bytes,
   as `Serial::puts` does. Two strings can't be compared with `===`.
@@ -118,6 +118,12 @@ strings, no interpolation like `"$x"`, and no heredocs.
   And a variadic argument has no type to tell the compiler which you mean, so
   `Kprintf::printf('%c', 'a')` is an error: write `u8('a')` to pass the character or
   `Mem::addr('a')` to pass the text.
+- **`.` joins constants at build time.** Each side must be a string literal, a whole-number constant
+  (written in decimal), a class constant that holds either, or another join. So
+  `'page size ' . self::PAGE_SIZE . ' bytes'` becomes one string in the C code and costs nothing at
+  run time. A variable can't be joined: its value isn't known until the program runs, and there is
+  nowhere to build a new string. `.=` is refused for the same reason. As in PHP 8, `+` and `-` are
+  worked out before `.`, so `'n=' . 1 + 2` is `'n=3'`.
 - The address of a string, if you need it, is `Mem::addr('text')`. That is how `Kprintf` handles
   `%s` and `(null)`.
 

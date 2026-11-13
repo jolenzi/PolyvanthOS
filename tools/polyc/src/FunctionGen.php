@@ -601,6 +601,11 @@ final class FunctionGen
     private function binary(array $n): Ex
     {
         $op = $n['op'];
+        if ($op === '.') {
+            $text = $this->program->foldString($n, $this->class)
+                ?? $this->err("'.' joins strings at build time, so each side must be a string, a whole-number constant or a class constant: the value of a variable is not known until run time", $n);
+            return new Ex($this->gen->cString($text), Type::simple('string'));
+        }
         if ($op === '&&' || $op === '||') {
             return new Ex('(' . $this->cond($n['l']) . " $op " . $this->cond($n['r']) . ')', Type::simple('bool'));
         }
