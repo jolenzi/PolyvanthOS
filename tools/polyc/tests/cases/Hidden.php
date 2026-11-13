@@ -6,9 +6,11 @@ declare(strict_types=1);
 
 namespace Test;
 
-/** Used by the PrivateAccess error test. */
+/** Used by the PrivateAccess and PrivateConstantJoin error tests. */
 final class Hidden
 {
+    private const NAME = 'hidden';
+
     private static function secret(): void
     {
     }

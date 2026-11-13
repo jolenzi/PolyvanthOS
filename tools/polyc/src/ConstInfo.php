@@ -19,6 +19,8 @@ final class ConstInfo
     /** The text a #define gets for a scalar constant. */
     public ?string $body = null;
     public bool $resolving = false;
+    /** Set while Program folds this constant, to stop a constant that refers to itself. */
+    public bool $folding = false;
 
     /**
      * @param array<string,mixed> $expr
