@@ -130,6 +130,20 @@ A `%s` argument is the address of the text, so `printf` reads it a byte at a tim
 `Mem::read8` until it finds a zero. An address of 0 prints `(null)`. The `%c` argument is the
 character code, for example `u8('a')`.
 
+### Variables in the format
+
+`printf` is marked `#[Format]`, so it also accepts a string with variables in it:
+
+```php
+$mebibytes = $usableBytes >> 20;
+Kprintf::printf("Usable memory: $mebibytes MiB\n");
+```
+
+The compiler turns this into `printf("Usable memory: %lu MiB\n", $mebibytes)`, so it is the same
+call and the same output, and nothing is built at run time. The conversion is chosen from the type
+of the variable (see [the language](../language.md#strings)). It prints in decimal, so for hex
+addresses or `%c` you still write the format yourself, as in `printf("RIP 0x%lx\n", $rip)`.
+
 ### What is checked
 
 The compiler checks that every argument can be passed (a whole number, a bool, a string, an

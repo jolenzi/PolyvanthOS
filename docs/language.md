@@ -104,7 +104,8 @@ A variable that is read before anything is stored in it is an error. A name can'
 
 A `string` is a pointer to bytes that end in a zero, and it never changes. Literals are what you
 get: `'text'` and `"text\n"` (with the usual PHP escapes in double quotes). Strings can be joined
-with `.`, but only at build time (see below). There is no interpolation like `"$x"` and no heredocs.
+with `.`, but only at build time (see below). A string with variables in it, like `"free: $n pages"`,
+works only for functions marked `#[Format]` (see below). There are no heredocs.
 
 - `$s[$i]` is the byte at that position, as a `u8`. A string is compared by looking at its bytes,
   as `Serial::puts` does. Two strings can't be compared with `===`.
@@ -124,6 +125,17 @@ with `.`, but only at build time (see below). There is no interpolation like `"$
   run time. A variable can't be joined: its value isn't known until the program runs, and there is
   nowhere to build a new string. `.=` is refused for the same reason. As in PHP 8, `+` and `-` are
   worked out before `.`, so `'n=' . 1 + 2` is `'n=3'`.
+- **Variables in a string work for `#[Format]` functions.** `Kprintf::printf` is one: its first
+  parameter is a printf format, and the values follow as variadic arguments. Given
+  `Kprintf::printf("Usable memory: $mebibytes MiB ($pages pages)\n")`, the compiler writes the format
+  `"Usable memory: %lu MiB (%lu pages)\n"` and passes the two values, so nothing is built at run time.
+  You can write `$name`, `$object->property` and `{$expression}` (such as `{$list[0]}`); `$list[0]`
+  without braces is refused. The conversion comes from the type: whole numbers in decimal, a `bool`
+  as `true` or `false`, a string as text (`(null)` for null), an object as its address. A number is
+  never printed as a character or in hex: for that write a printf format yourself (`%c`, `%lx`).
+  A `%` in the text is printed as a `%`. Such a string can't be followed by more printf arguments,
+  can't be joined with `.`, and is an error anywhere except as the first argument of a `#[Format]`
+  function.
 - The address of a string, if you need it, is `Mem::addr('text')`. That is how `Kprintf` handles
   `%s` and `(null)`.
 
@@ -307,6 +319,7 @@ assembly (or Limine, in the case of `kmain`) can call it.
 | `Section('name')` | static property | Put it in this section of the file |
 | `Used` | static property | Keep it even if nothing reads it |
 | `Volatile` | static property | Something else (Limine, the hardware) may change it |
+| `Format` | method | The first parameter is a printf format and the last is variadic, so a string with variables in it can be passed as the format |
 
 ## Mistakes the compiler catches
 

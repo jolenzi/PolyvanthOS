@@ -63,6 +63,7 @@ final class Kprintf
      * %d, %u and %x also accept the l and ll length modifiers, for example %lu or %llx.
      * Every argument is passed as one 64-bit word. A %s argument is the address of the text.
      */
+    #[Format]
     public static function printf(string $fmt, mixed ...$args): void
     {
         $next = 0; // index of the next argument
